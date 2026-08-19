@@ -5,11 +5,11 @@ export type IntentType =
   | 'SEARCH_PRODUCT'
   | 'SHOW_LIST'
   | 'CLEAR_LIST'
-  | 'GET_SUGGESTIONS';
+  | 'GET_SUGGESTIONS'
+  | 'UNKNOWN';
 
 export interface VoiceParseRequest {
-  transcript: string;
-  language?: string;
+  text: string;
 }
 
 export interface ParsedIntent {
@@ -17,7 +17,12 @@ export interface ParsedIntent {
   item?: string | null;
   quantity?: number | null;
   unit?: string | null;
+  max_price?: number | null;
+  min_price?: number | null;
+  brand?: string | null;
   category?: string | null;
-  raw_transcript: string;
   confidence?: number;
+  original_text: string;
+  normalized_text?: string | null;
+  message?: string | null;
 }

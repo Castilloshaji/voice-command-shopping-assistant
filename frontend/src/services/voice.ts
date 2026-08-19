@@ -1,17 +1,47 @@
-export interface VoiceServiceConfig {
-  language: string;
-  continuous: boolean;
-  interimResults: boolean;
+export interface LanguageOption {
+  code: string;
+  label: string;
+  nativeName: string;
 }
 
-export interface SpeechRecognitionResultHandler {
-  onResult: (transcript: string, isFinal: boolean) => void;
-  onError: (error: string) => void;
-  onEnd: () => void;
+export const SUPPORTED_LANGUAGES: LanguageOption[] = [
+  { code: 'en-US', label: 'English (US)', nativeName: 'English' },
+  { code: 'hi-IN', label: 'Hindi', nativeName: 'हिन्दी' },
+  { code: 'ml-IN', label: 'Malayalam', nativeName: 'മലയാളം' },
+];
+
+export interface VoiceServiceConfig {
+  language: string;
+  continuous?: boolean;
+  interimResults?: boolean;
+}
+
+// Extend global Window interface for SpeechRecognition typescript support
+declare global {
+  interface Window {
+    SpeechRecognition: any;
+    webkitSpeechRecognition: any;
+  }
 }
 
 export class VoiceService {
   public static isSupported(): boolean {
-    return 'SpeechRecognition' in window || 'webkitSpeechRecognition' in window;
+    return (
+      typeof window !== 'undefined' &&
+      ('SpeechRecognition' in window || 'webkitSpeechRecognition' in window)
+    );
+  }
+
+  public static createRecognition(config: VoiceServiceConfig): any | null {
+    if (!VoiceService.isSupported()) {
+      return null;
+    }
+    const SpeechRecognitionClass =
+      window.SpeechRecognition || window.webkitSpeechRecognition;
+    const recognition = new SpeechRecognitionClass();
+    recognition.continuous = config.continuous ?? false;
+    recognition.interimResults = config.interimResults ?? true;
+    recognition.lang = config.language || 'en-US';
+    return recognition;
   }
 }

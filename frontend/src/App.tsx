@@ -1,37 +1,23 @@
-import { useEffect, useState } from 'react';
-import { apiService, HealthCheckResponse } from './services/api';
+import React from 'react';
+import { VoiceAssistant } from './components/VoiceAssistant';
 
-export function App() {
-  const [health, setHealth] = useState<HealthCheckResponse | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    apiService.getHealth()
-      .then(setHealth)
-      .catch((err) => setError(err.message || 'Health check failed'));
-  }, []);
-
+export const App: React.FC = () => {
   return (
-    <main className="container">
-      <header className="header">
-        <h1 className="title">Voice Command Shopping Assistant</h1>
-        <span className="badge">Phase 1 — Foundation Initialized</span>
+    <div className="app-container">
+      <header className="app-header">
+        <h1>Voice Command Shopping Assistant</h1>
+        <p className="app-subtitle">Phase 4 - Browser Voice Input & Intent Preview</p>
       </header>
 
-      <section className="status-card">
-        <h3>Backend API Connection</h3>
-        {error ? (
-          <p style={{ color: '#ef4444', marginTop: '0.5rem' }}>Status: Disconnected ({error})</p>
-        ) : health ? (
-          <p style={{ color: '#22c55e', marginTop: '0.5rem' }}>
-            Status: Connected ({health.app} v{health.version})
-          </p>
-        ) : (
-          <p style={{ marginTop: '0.5rem' }}>Checking backend health...</p>
-        )}
-      </section>
-    </main>
+      <main className="app-main">
+        <VoiceAssistant />
+      </main>
+
+      <footer className="app-footer">
+        <p>Voice Command Shopping Assistant - Built with React & FastAPI</p>
+      </footer>
+    </div>
   );
-}
+};
 
 export default App;
