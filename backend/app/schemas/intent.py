@@ -1,6 +1,6 @@
 from enum import Enum
 from typing import Optional
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, field_validator
 
 class IntentEnum(str, Enum):
     ADD_ITEM = "ADD_ITEM"
@@ -10,16 +10,29 @@ class IntentEnum(str, Enum):
     SHOW_LIST = "SHOW_LIST"
     CLEAR_LIST = "CLEAR_LIST"
     GET_SUGGESTIONS = "GET_SUGGESTIONS"
+    UNKNOWN = "UNKNOWN"
 
 class VoiceParseRequest(BaseModel):
-    transcript: str
-    language: Optional[str] = "en-US"
+    text: str = Field(..., description="Canonical natural language command text")
+    language: Optional[str] = Field(default="en-US", description="Language code")
+
+    @field_validator("text")
+    @classmethod
+    def validate_text(cls, v: str) -> str:
+        if not v or not v.strip():
+            raise ValueError("text cannot be empty or whitespace")
+        return v
 
 class ParsedIntent(BaseModel):
     intent: IntentEnum
     item: Optional[str] = None
     quantity: Optional[float] = None
     unit: Optional[str] = None
+    max_price: Optional[float] = None
+    min_price: Optional[float] = None
+    brand: Optional[str] = None
     category: Optional[str] = None
-    raw_transcript: str
-    confidence: Optional[float] = 1.0
+    confidence: float = 1.0
+    original_text: str
+    normalized_text: Optional[str] = None
+    message: Optional[str] = None

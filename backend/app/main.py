@@ -5,7 +5,7 @@ from app.core.config import settings
 from app.core.database import engine, SessionLocal
 from app.models import Base
 from app.core.seed_data import seed_products
-from app.api.v1 import health, items
+from app.api.v1 import health, items, voice
 
 # Create database tables
 Base.metadata.create_all(bind=engine)
@@ -41,6 +41,7 @@ app.add_middleware(
 app.include_router(health.router)
 app.include_router(health.router, prefix=settings.API_V1_STR)
 app.include_router(items.router, prefix=settings.API_V1_STR)
+app.include_router(voice.router, prefix=settings.API_V1_STR)
 
 @app.get("/")
 def root():
