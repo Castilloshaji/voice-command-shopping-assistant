@@ -1,14 +1,13 @@
 import React, { useState } from 'react';
 import { useSpeechRecognition } from '../hooks/useSpeechRecognition';
 import { SUPPORTED_LANGUAGES } from '../services/voice';
-import { apiService } from '../services/api';
-import { ParsedIntent } from '../types/intent';
+import { apiService, CommandExecutionResponse } from '../services/api';
 
-export type VoiceState = 'IDLE' | 'LISTENING' | 'PROCESSING' | 'RESULT' | 'ERROR';
+export type VoiceState = 'IDLE' | 'LISTENING' | 'PROCESSING' | 'EXECUTING' | 'RESULT' | 'ERROR';
 
 export const VoiceAssistant: React.FC = () => {
   const [voiceState, setVoiceState] = useState<VoiceState>('IDLE');
-  const [parsedResult, setParsedResult] = useState<ParsedIntent | null>(null);
+  const [executionResult, setExecutionResult] = useState<CommandExecutionResponse | null>(null);
   const [apiError, setApiError] = useState<string | null>(null);
 
   const handleFinalSpeech = async (finalText: string) => {
@@ -18,11 +17,12 @@ export const VoiceAssistant: React.FC = () => {
     setApiError(null);
 
     try {
-      const result = await apiService.parseVoiceCommand(finalText);
-      setParsedResult(result);
+      setVoiceState('EXECUTING');
+      const result = await apiService.executeVoiceCommand(finalText);
+      setExecutionResult(result);
       setVoiceState('RESULT');
     } catch (err: any) {
-      setApiError(err.message || 'Failed to understand command. Please try again.');
+      setApiError(err.message || 'Failed to execute command. Please try again.');
       setVoiceState('ERROR');
     }
   };
@@ -48,7 +48,7 @@ export const VoiceAssistant: React.FC = () => {
       stopListening();
     } else {
       resetTranscript();
-      setParsedResult(null);
+      setExecutionResult(null);
       setApiError(null);
       setVoiceState('LISTENING');
       startListening();
@@ -58,12 +58,11 @@ export const VoiceAssistant: React.FC = () => {
   const handleReset = () => {
     stopListening();
     resetTranscript();
-    setParsedResult(null);
+    setExecutionResult(null);
     setApiError(null);
     setVoiceState('IDLE');
   };
 
-  // Synchronize state if speech recognition encounters an error or stops
   const currentError = speechError || apiError;
   const activeState = currentError
     ? 'ERROR'
@@ -76,7 +75,7 @@ export const VoiceAssistant: React.FC = () => {
       <header className="voice-card-header">
         <div className="title-group">
           <h2>Voice Command Assistant</h2>
-          <span className="badge preview-badge">Preview Mode (Non-Executing)</span>
+          <span className="badge preview-badge">Live Execution Active</span>
         </div>
 
         {/* Language Selector */}
@@ -132,12 +131,13 @@ export const VoiceAssistant: React.FC = () => {
           </svg>
         </button>
 
-        {/* Status Prompt */}
+        {/* Status Label */}
         <div className="status-label">
           {activeState === 'IDLE' && <p>Tap the microphone to speak</p>}
           {activeState === 'LISTENING' && <p className="status-listening">Listening...</p>}
           {activeState === 'PROCESSING' && <p className="status-processing">Understanding command...</p>}
-          {activeState === 'RESULT' && <p className="status-result">Command Parsed</p>}
+          {activeState === 'EXECUTING' && <p className="status-processing">Executing command...</p>}
+          {activeState === 'RESULT' && <p className="status-result">Command Executed</p>}
           {activeState === 'ERROR' && <p className="status-error">Attention Required</p>}
         </div>
       </div>
@@ -165,73 +165,33 @@ export const VoiceAssistant: React.FC = () => {
         </div>
       )}
 
-      {/* Parsed Intent Result Preview */}
-      {activeState === 'RESULT' && parsedResult && (
-        <div className="result-preview-card">
+      {/* Execution Result Display */}
+      {activeState === 'RESULT' && executionResult && (
+        <div className={`result-preview-card ${executionResult.success ? 'success-card' : 'failure-card'}`}>
           <div className="result-header">
-            <h3>Parsed Intent Result</h3>
-            <span className={`intent-badge ${parsedResult.intent.toLowerCase()}`}>
-              {parsedResult.intent}
+            <h3>{executionResult.success ? 'Execution Successful' : 'Execution Status'}</h3>
+            <span className={`intent-badge ${executionResult.intent.toLowerCase()}`}>
+              {executionResult.intent}
             </span>
           </div>
 
           <div className="result-details">
-            <div className="detail-row">
-              <span className="detail-label">Recognized Command:</span>
-              <span className="detail-value">"{parsedResult.original_text}"</span>
-            </div>
+            <p className="execution-message">{executionResult.message}</p>
 
-            {parsedResult.item && (
-              <div className="detail-row">
-                <span className="detail-label">Item:</span>
-                <span className="detail-value highlight">{parsedResult.item}</span>
+            {executionResult.data && (
+              <div className="data-preview">
+                <span className="detail-label">Response Data:</span>
+                <pre className="json-display">
+                  {JSON.stringify(executionResult.data, null, 2)}
+                </pre>
               </div>
             )}
-
-            {parsedResult.quantity !== undefined && parsedResult.quantity !== null && (
-              <div className="detail-row">
-                <span className="detail-label">Quantity:</span>
-                <span className="detail-value">{parsedResult.quantity}</span>
-              </div>
-            )}
-
-            {parsedResult.unit && (
-              <div className="detail-row">
-                <span className="detail-label">Unit:</span>
-                <span className="detail-value">{parsedResult.unit}</span>
-              </div>
-            )}
-
-            {parsedResult.max_price !== undefined && parsedResult.max_price !== null && (
-              <div className="detail-row">
-                <span className="detail-label">Max Price:</span>
-                <span className="detail-value">${parsedResult.max_price}</span>
-              </div>
-            )}
-
-            {parsedResult.min_price !== undefined && parsedResult.min_price !== null && (
-              <div className="detail-row">
-                <span className="detail-label">Min Price:</span>
-                <span className="detail-value">${parsedResult.min_price}</span>
-              </div>
-            )}
-
-            {parsedResult.brand && (
-              <div className="detail-row">
-                <span className="detail-label">Brand:</span>
-                <span className="detail-value">{parsedResult.brand}</span>
-              </div>
-            )}
-          </div>
-
-          <div className="notice-footer">
-            ℹ️ Voice commands are currently in <strong>Parse & Preview Mode</strong>. No backend data has been modified.
           </div>
         </div>
       )}
 
       {/* Action Bar */}
-      {(transcript || parsedResult || currentError) && (
+      {(transcript || executionResult || currentError) && (
         <div className="card-actions">
           <button className="btn btn-secondary" onClick={handleReset}>
             Reset Voice Input
