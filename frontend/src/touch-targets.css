@@ -1,0 +1,24 @@
+/* Keep compact labels while providing a reliable 44px touch target. */
+.btn-sm,
+.btn-xs,
+.tag-btn,
+.qty-btn,
+.icon-btn,
+.command-examples button,
+.lang-dropdown {
+  min-width: 44px;
+  min-height: 44px;
+}
+
+.qty-btn,
+.icon-btn,
+.tag-btn,
+.command-examples button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.command-examples button {
+  padding: 0 6px;
+}
