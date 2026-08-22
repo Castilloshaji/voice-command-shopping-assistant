@@ -2,32 +2,39 @@ import React, { useState } from 'react';
 import { useSpeechRecognition } from '../hooks/useSpeechRecognition';
 import { SUPPORTED_LANGUAGES } from '../services/voice';
 import { apiService, CommandExecutionResponse } from '../services/api';
-import { Product } from '../types/product';
-import { Suggestion } from '../types/suggestion';
-
 
 export type VoiceState = 'IDLE' | 'LISTENING' | 'PROCESSING' | 'EXECUTING' | 'RESULT' | 'ERROR';
 
-export const VoiceAssistant: React.FC = () => {
+interface VoiceAssistantProps {
+  onCommandExecuted?: () => void;
+}
+
+export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onCommandExecuted }) => {
   const [voiceState, setVoiceState] = useState<VoiceState>('IDLE');
   const [executionResult, setExecutionResult] = useState<CommandExecutionResponse | null>(null);
   const [apiError, setApiError] = useState<string | null>(null);
+  const [manualText, setManualText] = useState<string>('');
 
-  const handleFinalSpeech = async (finalText: string) => {
-    if (!finalText || !finalText.trim()) return;
+  const handleExecuteCommandText = async (text: string) => {
+    if (!text || !text.trim()) return;
 
     setVoiceState('PROCESSING');
     setApiError(null);
 
     try {
       setVoiceState('EXECUTING');
-      const result = await apiService.executeVoiceCommand(finalText);
+      const result = await apiService.executeVoiceCommand(text);
       setExecutionResult(result);
       setVoiceState('RESULT');
+      if (onCommandExecuted) onCommandExecuted();
     } catch (err: any) {
       setApiError(err.message || 'Failed to execute command. Please try again.');
       setVoiceState('ERROR');
     }
+  };
+
+  const handleFinalSpeech = (finalText: string) => {
+    handleExecuteCommandText(finalText);
   };
 
   const {
@@ -58,6 +65,14 @@ export const VoiceAssistant: React.FC = () => {
     }
   };
 
+  const handleManualSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!manualText.trim()) return;
+    const cmd = manualText.trim();
+    setManualText('');
+    handleExecuteCommandText(cmd);
+  };
+
   const handleReset = () => {
     stopListening();
     resetTranscript();
@@ -74,11 +89,11 @@ export const VoiceAssistant: React.FC = () => {
     : voiceState;
 
   return (
-    <div className="voice-assistant-card">
+    <div className="section-card voice-assistant-card">
       <header className="voice-card-header">
         <div className="title-group">
           <h2>Voice Command Assistant</h2>
-          <span className="badge preview-badge">Live Execution Active</span>
+          <span className="badge preview-badge">Web Speech API</span>
         </div>
 
         {/* Language Selector */}
@@ -90,6 +105,7 @@ export const VoiceAssistant: React.FC = () => {
             onChange={(e) => setSelectedLanguage(e.target.value)}
             disabled={isListening}
             className="lang-dropdown"
+            aria-label="Select voice recognition language"
           >
             {SUPPORTED_LANGUAGES.map((lang) => (
               <option key={lang.code} value={lang.code}>
@@ -100,23 +116,26 @@ export const VoiceAssistant: React.FC = () => {
         </div>
       </header>
 
-      {/* Browser Support Banner */}
+      {/* Browser Support Alert */}
       {!isSupported && (
-        <div className="alert alert-warning" id="browser-support-alert">
+        <div className="alert alert-warning" role="alert">
           🎤 Voice input is not supported in this browser. Please try Chrome or Edge.
         </div>
       )}
 
-      {/* Main Microphone Interaction Area */}
+      {/* Microphone Interaction Area */}
       <div className="mic-section">
         <button
-          className={`mic-button ${isListening ? 'listening' : ''} ${
-            !isSupported ? 'disabled' : ''
-          }`}
+          type="button"
+          className={`mic-button ${isListening ? 'listening' : ''} ${!isSupported ? 'disabled' : ''}`}
           onClick={handleMicClick}
           disabled={!isSupported}
           title={isListening ? 'Click to stop listening' : 'Click to start speaking'}
-          aria-label="Toggle voice input"
+          aria-label={
+            isListening
+              ? 'Stop listening voice input'
+              : 'Start listening voice input'
+          }
         >
           <svg
             className="mic-icon"
@@ -126,6 +145,7 @@ export const VoiceAssistant: React.FC = () => {
             strokeWidth="2"
             strokeLinecap="round"
             strokeLinejoin="round"
+            aria-hidden="true"
           >
             <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
             <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
@@ -134,127 +154,62 @@ export const VoiceAssistant: React.FC = () => {
           </svg>
         </button>
 
-        {/* Status Label */}
-        <div className="status-label">
-          {activeState === 'IDLE' && <p>Tap the microphone to speak</p>}
+        {/* Status Label with Live Region */}
+        <div className="status-label" aria-live="polite">
+          {activeState === 'IDLE' && <p>Tap the microphone to speak a command</p>}
           {activeState === 'LISTENING' && <p className="status-listening">Listening...</p>}
           {activeState === 'PROCESSING' && <p className="status-processing">Understanding command...</p>}
           {activeState === 'EXECUTING' && <p className="status-processing">Executing command...</p>}
-          {activeState === 'RESULT' && <p className="status-result">Command Executed</p>}
+          {activeState === 'RESULT' && <p className="status-result">Command Executed Successfully</p>}
           {activeState === 'ERROR' && <p className="status-error">Attention Required</p>}
         </div>
       </div>
 
+      {/* Manual Text Command Input Bar */}
+      <form className="manual-command-form" onSubmit={handleManualSubmit}>
+        <input
+          type="text"
+          className="manual-command-input"
+          placeholder="Or type a voice command (e.g. 'Add 2 bottles of milk')"
+          value={manualText}
+          onChange={(e) => setManualText(e.target.value)}
+          aria-label="Type a command input"
+        />
+        <button type="submit" className="btn btn-secondary" disabled={!manualText.trim()}>
+          Run Command
+        </button>
+      </form>
+
       {/* Live Transcript Display */}
       {(transcript || interimTranscript) && (
-        <div className="transcript-box">
+        <div className="transcript-box" aria-live="polite">
           <span className="transcript-label">Recognized Speech:</span>
           <p className="transcript-text">
             {transcript}
-            {interimTranscript && (
-              <span className="interim-text"> {interimTranscript}...</span>
-            )}
+            {interimTranscript && <span className="interim-text"> {interimTranscript}...</span>}
           </p>
         </div>
       )}
 
       {/* Error Display */}
       {currentError && (
-        <div className="alert alert-error">
+        <div className="alert alert-error" role="alert">
           <p>{currentError}</p>
-          <button className="btn btn-sm btn-outline" onClick={handleReset}>
+          <button type="button" className="btn btn-sm btn-outline" onClick={handleReset}>
             Try Again
           </button>
         </div>
       )}
 
-      {/* Execution Result Display */}
+      {/* Action Execution Result Banner */}
       {activeState === 'RESULT' && executionResult && (
-        <div className={`result-preview-card ${executionResult.success ? 'success-card' : 'failure-card'}`}>
-          <div className="result-header">
-            <h3>{executionResult.success ? 'Execution Successful' : 'Execution Status'}</h3>
+        <div className={`result-banner ${executionResult.success ? 'success-banner' : 'failure-banner'}`}>
+          <div className="banner-header">
             <span className={`intent-badge ${executionResult.intent.toLowerCase()}`}>
               {executionResult.intent}
             </span>
+            <span className="execution-message">{executionResult.message}</span>
           </div>
-
-          <div className="result-details">
-            <p className="execution-message">{executionResult.message}</p>
-
-            {/* SEARCH_PRODUCT Display */}
-            {executionResult.intent === 'SEARCH_PRODUCT' && Array.isArray(executionResult.data) && (
-              <div className="structured-results-list">
-                {(executionResult.data as Product[]).map((prod) => (
-                  <div key={prod.id} className="product-result-card">
-                    <div className="product-title-row">
-                      <span className="product-name">{prod.name}</span>
-                      <span className="product-price">${prod.price.toFixed(2)}</span>
-                    </div>
-
-                    <div className="product-meta-row">
-                      {prod.brand && <span className="brand-badge">{prod.brand}</span>}
-                      <span className="cat-badge">{prod.category}</span>
-                      <span className={`avail-badge ${prod.is_available ? 'in-stock' : 'out-of-stock'}`}>
-                        {prod.is_available ? 'In Stock' : 'Unavailable'}
-                      </span>
-                    </div>
-
-                    {!prod.is_available && prod.substitute_products && prod.substitute_products.length > 0 && (
-                      <div className="substitutes-box">
-                        <span className="substitutes-header">Suggested Substitutes:</span>
-                        {prod.substitute_products.map((sub) => (
-                          <div key={sub.id} className="substitute-item">
-                            <span>↪ {sub.name} ({sub.brand ? `${sub.brand} • ` : ''}{sub.category})</span>
-                            <span className="product-price">${sub.price.toFixed(2)}</span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {/* GET_SUGGESTIONS Display */}
-            {executionResult.intent === 'GET_SUGGESTIONS' && Array.isArray(executionResult.data) && (
-              <div className="structured-results-list">
-                {(executionResult.data as Suggestion[]).map((sugg, idx) => (
-                  <div key={sugg.product_id || idx} className="recommendation-card">
-                    <div className="product-title-row">
-                      <span className="product-name">
-                        {sugg.product || sugg.item_name}
-                      </span>
-                      <span className="score-badge">Score: {sugg.score.toFixed(1)}</span>
-                    </div>
-
-                    <div className="product-meta-row">
-                      {sugg.category && <span className="cat-badge">{sugg.category}</span>}
-                      <span className="reason-tag">💡 {sugg.reason}</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {executionResult.data && (
-              <div className="data-preview">
-                <span className="detail-label">Raw Response Data:</span>
-                <pre className="json-display">
-                  {JSON.stringify(executionResult.data, null, 2)}
-                </pre>
-              </div>
-            )}
-
-          </div>
-        </div>
-      )}
-
-      {/* Action Bar */}
-      {(transcript || executionResult || currentError) && (
-        <div className="card-actions">
-          <button className="btn btn-secondary" onClick={handleReset}>
-            Reset Voice Input
-          </button>
         </div>
       )}
     </div>

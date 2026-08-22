@@ -1,4 +1,7 @@
 import { ParsedIntent, IntentType } from '../types/intent';
+import { ListItem, ListItemCreate, ListItemUpdate } from '../types/shoppingList';
+import { Product } from '../types/product';
+import { Suggestion } from '../types/suggestion';
 
 const API_BASE_URL = '/api/v1';
 
@@ -15,6 +18,15 @@ export interface CommandExecutionResponse {
   data?: any;
 }
 
+export interface ProductSearchParams {
+  query?: string;
+  category?: string;
+  brand?: string;
+  min_price?: number;
+  max_price?: number;
+  availability?: boolean;
+}
+
 export const apiService = {
   async getHealth(): Promise<HealthCheckResponse> {
     const response = await fetch('/health');
@@ -24,12 +36,97 @@ export const apiService = {
     return response.json();
   },
 
+  async getShoppingList(): Promise<ListItem[]> {
+    const response = await fetch(`${API_BASE_URL}/items`);
+    if (!response.ok) {
+      throw new Error(`Failed to fetch shopping list (${response.status})`);
+    }
+    return response.json();
+  },
+
+  async createShoppingItem(itemData: ListItemCreate): Promise<ListItem> {
+    const response = await fetch(`${API_BASE_URL}/items`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(itemData),
+    });
+    if (!response.ok) {
+      const errData = await response.json().catch(() => ({}));
+      throw new Error(errData.detail || `Failed to create item (${response.status})`);
+    }
+    return response.json();
+  },
+
+  async updateShoppingItem(id: number, itemData: ListItemUpdate): Promise<ListItem> {
+    const response = await fetch(`${API_BASE_URL}/items/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(itemData),
+    });
+    if (!response.ok) {
+      const errData = await response.json().catch(() => ({}));
+      throw new Error(errData.detail || `Failed to update item (${response.status})`);
+    }
+    return response.json();
+  },
+
+  async deleteShoppingItem(id: number): Promise<{ message: string; id: number }> {
+    const response = await fetch(`${API_BASE_URL}/items/${id}`, {
+      method: 'DELETE',
+    });
+    if (!response.ok) {
+      const errData = await response.json().catch(() => ({}));
+      throw new Error(errData.detail || `Failed to delete item (${response.status})`);
+    }
+    return response.json();
+  },
+
+  async clearShoppingList(): Promise<{ message: string; deleted_count: number }> {
+    const response = await fetch(`${API_BASE_URL}/items`, {
+      method: 'DELETE',
+    });
+    if (!response.ok) {
+      const errData = await response.json().catch(() => ({}));
+      throw new Error(errData.detail || `Failed to clear list (${response.status})`);
+    }
+    return response.json();
+  },
+
+  async searchProducts(params?: ProductSearchParams): Promise<Product[]> {
+    const searchParams = new URLSearchParams();
+    if (params) {
+      if (params.query) searchParams.append('query', params.query);
+      if (params.category) searchParams.append('category', params.category);
+      if (params.brand) searchParams.append('brand', params.brand);
+      if (params.min_price !== undefined) searchParams.append('min_price', params.min_price.toString());
+      if (params.max_price !== undefined) searchParams.append('max_price', params.max_price.toString());
+      if (params.availability !== undefined) searchParams.append('availability', params.availability.toString());
+    }
+
+    const queryStr = searchParams.toString();
+    const url = `${API_BASE_URL}/products${queryStr ? `?${queryStr}` : ''}`;
+
+    const response = await fetch(url);
+    if (!response.ok) {
+      const errData = await response.json().catch(() => ({}));
+      throw new Error(errData.detail || `Failed to fetch products (${response.status})`);
+    }
+    return response.json();
+  },
+
+  async getSuggestions(limit: number = 5): Promise<Suggestion[]> {
+    const response = await fetch(`${API_BASE_URL}/suggestions?limit=${limit}`);
+    if (!response.ok) {
+      const errData = await response.json().catch(() => ({}));
+      throw new Error(errData.detail || `Failed to fetch suggestions (${response.status})`);
+    }
+    return response.json();
+  },
+
   async parseVoiceCommand(text: string): Promise<ParsedIntent> {
     const response = await fetch(`${API_BASE_URL}/voice/parse`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ text }),
     });
 
@@ -45,9 +142,7 @@ export const apiService = {
   async executeVoiceCommand(text: string): Promise<CommandExecutionResponse> {
     const response = await fetch(`${API_BASE_URL}/voice/execute`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ text }),
     });
 

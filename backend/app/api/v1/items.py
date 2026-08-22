@@ -57,3 +57,10 @@ def delete_item(
             detail=f"Item with id {item_id} not found"
         )
     return {"message": "Item deleted successfully", "id": item_id}
+
+@router.delete("", status_code=status.HTTP_200_OK)
+def clear_items(db: Session = Depends(get_db)):
+    """Clear all items from the shopping list."""
+    count = ShoppingListService.clear_list(db)
+    return {"message": f"Cleared all {count} items from your shopping list.", "deleted_count": count}
+
