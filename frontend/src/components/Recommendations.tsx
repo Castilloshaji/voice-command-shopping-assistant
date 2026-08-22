@@ -55,8 +55,9 @@ export const Recommendations: React.FC<RecommendationsProps> = ({ onItemAdded, r
     <div className="section-card recommendations-card">
       <header className="section-header">
         <div className="title-group">
-          <h2>Smart Recommendations</h2>
-          <span className="badge success-badge">Personalized & Seasonal</span>
+          <p className="eyebrow">For you</p>
+          <h2>Helpful suggestions</h2>
+          <p className="section-intro">A few thoughtful picks for your next shop.</p>
         </div>
         <button
           type="button"
@@ -106,7 +107,7 @@ export const Recommendations: React.FC<RecommendationsProps> = ({ onItemAdded, r
               <div key={sugg.product_id || idx} className="recommendation-item-card">
                 <div className="rec-header">
                   <span className="rec-name">{displayName}</span>
-                  <span className="score-badge">Score: {sugg.score.toFixed(1)}</span>
+                  <span className="score-badge" aria-label={`${sugg.score.toFixed(1)} relevance score`}>Great match</span>
                 </div>
 
                 <div className="rec-meta">

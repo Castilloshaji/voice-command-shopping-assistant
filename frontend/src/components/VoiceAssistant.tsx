@@ -92,8 +92,9 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onCommandExecute
     <div className="section-card voice-assistant-card">
       <header className="voice-card-header">
         <div className="title-group">
-          <h2>Voice Command Assistant</h2>
-          <span className="badge preview-badge">Web Speech API</span>
+          <p className="eyebrow">Voice command</p>
+          <h2>What&apos;s on your shopping list?</h2>
+          <p className="section-intro">Say what you need and we&apos;ll take care of the list.</p>
         </div>
 
         {/* Language Selector */}
@@ -156,8 +157,8 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onCommandExecute
 
         {/* Status Label with Live Region */}
         <div className="status-label" aria-live="polite">
-          {activeState === 'IDLE' && <p>Tap the microphone to speak a command</p>}
-          {activeState === 'LISTENING' && <p className="status-listening">Listening...</p>}
+          {activeState === 'IDLE' && <p>Tap to speak</p>}
+          {activeState === 'LISTENING' && <p className="status-listening">Listening…</p>}
           {activeState === 'PROCESSING' && <p className="status-processing">Understanding command...</p>}
           {activeState === 'EXECUTING' && <p className="status-processing">Executing command...</p>}
           {activeState === 'RESULT' && <p className="status-result">Command Executed Successfully</p>}
@@ -179,6 +180,11 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onCommandExecute
           Run Command
         </button>
       </form>
+      <div className="command-examples" aria-label="Example voice commands">
+        <span>Try saying</span>
+        <button type="button" onClick={() => setManualText('Add milk to my list')}>“Add milk”</button>
+        <button type="button" onClick={() => setManualText('Add 2 bottles of milk')}>“Add 2 bottles of milk”</button>
+      </div>
 
       {/* Live Transcript Display */}
       {(transcript || interimTranscript) && (
@@ -205,9 +211,7 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onCommandExecute
       {activeState === 'RESULT' && executionResult && (
         <div className={`result-banner ${executionResult.success ? 'success-banner' : 'failure-banner'}`}>
           <div className="banner-header">
-            <span className={`intent-badge ${executionResult.intent.toLowerCase()}`}>
-              {executionResult.intent}
-            </span>
+            <span className="result-icon" aria-hidden="true">{executionResult.success ? '✓' : '!'}</span>
             <span className="execution-message">{executionResult.message}</span>
           </div>
         </div>

@@ -68,8 +68,9 @@ export const ProductSearch: React.FC<ProductSearchProps> = ({ onItemAdded }) => 
     <div className="section-card search-card">
       <header className="section-header">
         <div className="title-group">
-          <h2>Product Catalog Search</h2>
-          <span className="badge info-badge">REST API</span>
+          <p className="eyebrow">Discover</p>
+          <h2>Find products you&apos;ll love</h2>
+          <p className="section-intro">Search the catalog or start with a quick pick.</p>
         </div>
       </header>
 
