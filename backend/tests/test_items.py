@@ -173,3 +173,26 @@ def test_10_item_not_found_behavior(client):
     res_delete_404 = client.delete("/api/v1/items/99999")
     assert res_delete_404.status_code == 404
     assert "not found" in res_delete_404.json()["detail"].lower()
+
+
+def test_11_no_duplicate_history_on_redundant_completion(client):
+    """11. Verify duplicate completion updates (True -> True) do not create duplicate ShoppingHistory events."""
+    from app.models.history import ShoppingHistory
+
+    create_res = client.post("/api/v1/items", json={"item_name": "organic apples"})
+    item_id = create_res.json()["id"]
+
+    # First completion update (False -> True)
+    up1 = client.put(f"/api/v1/items/{item_id}", json={"is_completed": True})
+    assert up1.status_code == 200
+
+    # Second completion update (True -> True)
+    up2 = client.put(f"/api/v1/items/{item_id}", json={"is_completed": True})
+    assert up2.status_code == 200
+
+    # Verify directly from DB session via override
+    db = TestingSessionLocal()
+    history_records = db.query(ShoppingHistory).filter(ShoppingHistory.item_name == "organic apples").all()
+    assert len(history_records) == 1
+    db.close()
+
