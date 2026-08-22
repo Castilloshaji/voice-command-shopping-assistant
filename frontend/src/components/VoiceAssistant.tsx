@@ -2,6 +2,9 @@ import React, { useState } from 'react';
 import { useSpeechRecognition } from '../hooks/useSpeechRecognition';
 import { SUPPORTED_LANGUAGES } from '../services/voice';
 import { apiService, CommandExecutionResponse } from '../services/api';
+import { Product } from '../types/product';
+import { Suggestion } from '../types/suggestion';
+
 
 export type VoiceState = 'IDLE' | 'LISTENING' | 'PROCESSING' | 'EXECUTING' | 'RESULT' | 'ERROR';
 
@@ -178,14 +181,70 @@ export const VoiceAssistant: React.FC = () => {
           <div className="result-details">
             <p className="execution-message">{executionResult.message}</p>
 
+            {/* SEARCH_PRODUCT Display */}
+            {executionResult.intent === 'SEARCH_PRODUCT' && Array.isArray(executionResult.data) && (
+              <div className="structured-results-list">
+                {(executionResult.data as Product[]).map((prod) => (
+                  <div key={prod.id} className="product-result-card">
+                    <div className="product-title-row">
+                      <span className="product-name">{prod.name}</span>
+                      <span className="product-price">${prod.price.toFixed(2)}</span>
+                    </div>
+
+                    <div className="product-meta-row">
+                      {prod.brand && <span className="brand-badge">{prod.brand}</span>}
+                      <span className="cat-badge">{prod.category}</span>
+                      <span className={`avail-badge ${prod.is_available ? 'in-stock' : 'out-of-stock'}`}>
+                        {prod.is_available ? 'In Stock' : 'Unavailable'}
+                      </span>
+                    </div>
+
+                    {!prod.is_available && prod.substitute_products && prod.substitute_products.length > 0 && (
+                      <div className="substitutes-box">
+                        <span className="substitutes-header">Suggested Substitutes:</span>
+                        {prod.substitute_products.map((sub) => (
+                          <div key={sub.id} className="substitute-item">
+                            <span>↪ {sub.name} ({sub.brand ? `${sub.brand} • ` : ''}{sub.category})</span>
+                            <span className="product-price">${sub.price.toFixed(2)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* GET_SUGGESTIONS Display */}
+            {executionResult.intent === 'GET_SUGGESTIONS' && Array.isArray(executionResult.data) && (
+              <div className="structured-results-list">
+                {(executionResult.data as Suggestion[]).map((sugg, idx) => (
+                  <div key={sugg.product_id || idx} className="recommendation-card">
+                    <div className="product-title-row">
+                      <span className="product-name">
+                        {sugg.product || sugg.item_name}
+                      </span>
+                      <span className="score-badge">Score: {sugg.score.toFixed(1)}</span>
+                    </div>
+
+                    <div className="product-meta-row">
+                      {sugg.category && <span className="cat-badge">{sugg.category}</span>}
+                      <span className="reason-tag">💡 {sugg.reason}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
             {executionResult.data && (
               <div className="data-preview">
-                <span className="detail-label">Response Data:</span>
+                <span className="detail-label">Raw Response Data:</span>
                 <pre className="json-display">
                   {JSON.stringify(executionResult.data, null, 2)}
                 </pre>
               </div>
             )}
+
           </div>
         </div>
       )}

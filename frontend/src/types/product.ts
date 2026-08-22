@@ -8,4 +8,6 @@ export interface Product {
   is_available: boolean;
   season?: string | null;
   substitutes?: string[];
+  substitute_products?: Product[];
 }
+

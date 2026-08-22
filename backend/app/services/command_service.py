@@ -160,15 +160,45 @@ class CommandService:
             products = ProductService.search_products(
                 db,
                 query=parsed.item,
+                category=parsed.category,
                 brand=parsed.brand,
                 min_price=parsed.min_price,
                 max_price=parsed.max_price
             )
-            data_prods = [ProductResponse.model_validate(p).model_dump(mode="json") for p in products]
+
+            if not products:
+                return CommandExecutionResponse(
+                    success=True,
+                    intent=intent,
+                    message="No products found matching your search criteria.",
+                    data=[]
+                )
+
+            data_prods = []
+            unavail_count = 0
+            sub_count = 0
+
+            for p in products:
+                prod_resp = ProductResponse.model_validate(p)
+                if not p.is_available:
+                    unavail_count += 1
+                    sub_objs = ProductService.get_substitutes_for_product(db, p)
+                    if sub_objs:
+                        sub_count += len(sub_objs)
+                        prod_resp.substitute_products = [ProductResponse.model_validate(sub) for sub in sub_objs]
+                data_prods.append(prod_resp.model_dump(mode="json"))
+
+            msg = f"Found {len(products)} matching product(s)."
+            if unavail_count > 0:
+                if sub_count > 0:
+                    msg += f" Note: {unavail_count} product(s) unavailable; {sub_count} substitute(s) suggested."
+                else:
+                    msg += f" Note: {unavail_count} product(s) currently unavailable."
+
             return CommandExecutionResponse(
                 success=True,
                 intent=intent,
-                message=f"Found {len(products)} matching products in catalog.",
+                message=msg,
                 data=data_prods
             )
 

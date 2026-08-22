@@ -248,20 +248,34 @@ class NLPService:
             # Step A: Strip search trigger verb prefix first
             norm_search = re.sub(r'^(?:find|search\s+for|search|look\s+for|show\s+me)\s+', '', norm).strip()
 
-            # Step B: Extract price filters
+            # Step B: Extract price filters (digits or number words)
             max_price: Optional[float] = None
             min_price: Optional[float] = None
-            
-            m_between = re.search(r'between\s+\$?(\d+(?:\.\d+)?)\s+and\s+\$?(\d+(?:\.\d+)?)', norm_search)
+
+            num_expr = r'(?:\d+(?:\.\d+)?|\b(?:one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|fifteen|twenty|thirty|fifty)\b)'
+
+            m_between = re.search(rf'between\s+\$?({num_expr})\s+and\s+\$?({num_expr})(?:\s+dollars?)?', norm_search)
             if m_between:
-                min_price = float(m_between.group(1))
-                max_price = float(m_between.group(2))
-                norm_search = re.sub(r'between\s+\$?(\d+(?:\.\d+)?)\s+and\s+\$?(\d+(?:\.\d+)?)', '', norm_search).strip()
+                val1 = NLPService.parse_number(m_between.group(1))
+                val2 = NLPService.parse_number(m_between.group(2))
+                if val1 is not None and val2 is not None:
+                    min_price = min(val1, val2)
+                    max_price = max(val1, val2)
+                    norm_search = re.sub(rf'between\s+\$?{num_expr}\s+and\s+\$?{num_expr}(?:\s+dollars?)?', '', norm_search).strip()
             else:
-                m_max = re.search(r'(?:under|below|less\s+than|up\s+to)\s+\$?(\d+(?:\.\d+)?)(?:\s+dollars?)?', norm_search)
+                m_max = re.search(rf'(?:under|below|less\s+than|up\s+to)\s+\$?({num_expr})(?:\s+dollars?)?', norm_search)
                 if m_max:
-                    max_price = float(m_max.group(1))
-                    norm_search = re.sub(r'(?:under|below|less\s+than|up\s+to)\s+\$?(\d+(?:\.\d+)?)(?:\s+dollars?)?', '', norm_search).strip()
+                    val_max = NLPService.parse_number(m_max.group(1))
+                    if val_max is not None:
+                        max_price = val_max
+                        norm_search = re.sub(rf'(?:under|below|less\s+than|up\s+to)\s+\$?{num_expr}(?:\s+dollars?)?', '', norm_search).strip()
+                else:
+                    m_min = re.search(rf'(?:above|over|more\s+than|at\s+least)\s+\$?({num_expr})(?:\s+dollars?)?', norm_search)
+                    if m_min:
+                        val_min = NLPService.parse_number(m_min.group(1))
+                        if val_min is not None:
+                            min_price = val_min
+                            norm_search = re.sub(rf'(?:above|over|more\s+than|at\s+least)\s+\$?{num_expr}(?:\s+dollars?)?', '', norm_search).strip()
 
             # Step C: Extract brand filter
             brand: Optional[str] = None
@@ -277,7 +291,9 @@ class NLPService:
                         break
 
             search_query = norm_search.strip()
-            
+            if search_query.lower() in {"product", "products", "item", "items", "anything", "all", "grocery", "groceries"}:
+                search_query = None
+
             return ParsedIntent(
                 intent=IntentEnum.SEARCH_PRODUCT,
                 item=search_query if search_query else None,
