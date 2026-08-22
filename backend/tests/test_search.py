@@ -39,6 +39,25 @@ def test_basic_search_and_case_insensitivity(db):
     assert len(results_upper) == 2
     assert [p.id for p in results] == [p.id for p in results_upper]
 
+@pytest.mark.parametrize(
+    ("command", "expected_ids"),
+    [
+        ("Find toothpaste", [2, 1]),
+        ("Find toothpaste under $5", [2, 1]),
+        ("Find toothpaste between $4 and $5", [1]),
+        ("Find Dove toothpaste", [1]),
+        ("Find toothpaste from Dove", [1]),
+    ],
+)
+def test_natural_language_search_filters_flow_through_command_service(db, command, expected_ids):
+    parsed = NLPService.parse_transcript(command)
+
+    assert parsed.intent == IntentEnum.SEARCH_PRODUCT
+    response = CommandService.execute_command(db, parsed)
+
+    assert response.success is True
+    assert [product["id"] for product in response.data] == expected_ids
+
 def test_whitespace_tolerance(db):
     results = ProductService.search_products(db, query="   toothpaste   ")
     assert len(results) == 2

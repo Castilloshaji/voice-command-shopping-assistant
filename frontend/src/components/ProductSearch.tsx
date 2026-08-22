@@ -32,9 +32,31 @@ export const ProductSearch: React.FC<ProductSearchProps> = ({ onItemAdded }) => 
     fetchProducts();
   }, [fetchProducts]);
 
-  const handleSearchSubmit = (e: React.FormEvent) => {
+  const handleSearchSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    fetchProducts({ query: searchQuery.trim() || undefined });
+    const query = searchQuery.trim();
+
+    if (!query) {
+      fetchProducts();
+      return;
+    }
+
+    try {
+      const parsed = await apiService.parseVoiceCommand(`Find ${query}`);
+      if (parsed.intent === 'SEARCH_PRODUCT') {
+        fetchProducts({
+          query: parsed.item || undefined,
+          brand: parsed.brand || undefined,
+          min_price: parsed.min_price ?? undefined,
+          max_price: parsed.max_price ?? undefined,
+        });
+        return;
+      }
+    } catch {
+      // Fall through to literal catalog search to preserve basic search availability.
+    }
+
+    fetchProducts({ query });
   };
 
   const handleQuickFilter = (query?: string, maxPrice?: number) => {
