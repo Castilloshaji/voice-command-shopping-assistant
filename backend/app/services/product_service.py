@@ -138,55 +138,74 @@ class ProductService:
         Returns:
         {
             "exact_match": Product | None,
-            "suggestions": List[Product]
+            "suggestions": List[Product],
+            "is_ambiguous": bool
         }
         """
         import difflib
+        from app.services.language_profiles import ENGLISH_PROFILE, MALAYALAM_PROFILE
 
         clean_name = item_name.strip().lower()
         if not clean_name:
-            return {"exact_match": None, "suggestions": []}
+            return {"exact_match": None, "suggestions": [], "is_ambiguous": False}
+
+        # Product Alias Resolution across English & Malayalam profiles
+        alias_map = {}
+        alias_map.update(ENGLISH_PROFILE.product_aliases)
+        alias_map.update(MALAYALAM_PROFILE.product_aliases)
+
+        if clean_name in alias_map:
+            clean_name = alias_map[clean_name]
 
         all_products = db.query(Product).all()
         if not all_products:
-            return {"exact_match": None, "suggestions": []}
+            return {"exact_match": None, "suggestions": [], "is_ambiguous": False}
 
         # 1. Exact match (case & whitespace insensitive)
         for prod in all_products:
             if prod.name.strip().lower() == clean_name:
-                return {"exact_match": prod, "suggestions": []}
+                return {"exact_match": prod, "suggestions": [], "is_ambiguous": False}
 
         # 2. Strong catalog match:
-        # Check token / substring containment between item_name and catalog product names
         norm_item = clean_name.replace("yoghurt", "yogurt")
 
         strong_matches = []
         for prod in all_products:
             p_name_lower = prod.name.strip().lower()
             if norm_item == p_name_lower:
-                return {"exact_match": prod, "suggestions": []}
+                return {"exact_match": prod, "suggestions": [], "is_ambiguous": False}
 
-            # Direct containment: input item is substring of product name or product name equals input item
+            # Direct containment: input item is substring of product name
             if norm_item in p_name_lower:
                 strong_matches.append(prod)
 
         if strong_matches:
             # Sort deterministically by shortest name length difference, name ascending, id
             strong_matches.sort(key=lambda p: (abs(len(p.name) - len(item_name)), p.name.strip().lower(), p.id))
-            return {"exact_match": strong_matches[0], "suggestions": []}
+
+            # Ambiguity check: If multiple strong matches exist with equal score, return candidates for clarification
+            if len(strong_matches) > 1:
+                diff0 = abs(len(strong_matches[0].name) - len(item_name))
+                diff1 = abs(len(strong_matches[1].name) - len(item_name))
+                if diff0 == diff1:
+                    return {
+                        "exact_match": None,
+                        "suggestions": strong_matches[:3],
+                        "is_ambiguous": True
+                    }
+
+            return {"exact_match": strong_matches[0], "suggestions": [], "is_ambiguous": False}
 
         # 3. No strong catalog match found (e.g. "minutes" or "unknownproduct")
         # Candidate suggestions search using difflib.SequenceMatcher
         scored_candidates = []
         for prod in all_products:
             ratio = difflib.SequenceMatcher(None, norm_item, prod.name.strip().lower()).ratio()
-            # Also evaluate ratio per token in product name
             for p_word in prod.name.strip().lower().split():
                 w_ratio = difflib.SequenceMatcher(None, norm_item, p_word).ratio()
                 if w_ratio > ratio:
                     ratio = w_ratio
 
-            # Only suggest products with reasonable similarity (threshold >= 0.5)
             if ratio >= 0.5:
                 scored_candidates.append((ratio, prod))
 
@@ -195,7 +214,8 @@ class ProductService:
 
         return {
             "exact_match": None,
-            "suggestions": suggestions
+            "suggestions": suggestions,
+            "is_ambiguous": False
         }
 
     @staticmethod

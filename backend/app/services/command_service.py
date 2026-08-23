@@ -62,10 +62,13 @@ class CommandService:
             unrecognized_items = []
             all_suggestions = []
 
+            is_ambiguous_query = False
             for item_info in target_items:
                 res = ProductService.resolve_product(db, item_info.item)
                 if res["exact_match"] is None:
                     unrecognized_items.append(item_info.item)
+                    if res.get("is_ambiguous", False):
+                        is_ambiguous_query = True
                     for s in res["suggestions"]:
                         if s.id not in [s_item["product_id"] for s_item in all_suggestions]:
                             all_suggestions.append({"product_id": s.id, "name": s.name})
@@ -73,7 +76,11 @@ class CommandService:
             # If ANY item is unrecognized: create NOTHING and return clarification error response
             if unrecognized_items:
                 bad_item = unrecognized_items[0]
-                if all_suggestions:
+                if is_ambiguous_query and all_suggestions:
+                    s_names = [f"'{s['name']}'" for s in all_suggestions[:2]]
+                    joined_s = " or ".join(s_names)
+                    msg = f"I found several matches for '{bad_item}'. Did you mean {joined_s}?"
+                elif all_suggestions:
                     if len(all_suggestions) == 1:
                         s_name = all_suggestions[0]["name"]
                         msg = f"I couldn't identify all the products in that command. Did you mean '{s_name}'?"

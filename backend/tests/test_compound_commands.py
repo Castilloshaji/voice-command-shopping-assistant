@@ -384,3 +384,111 @@ def test_catalog_validation_valid_compound_command():
     assert len(items) == 2
     names = {i["item_name"] for i in items}
     assert names == {"milk", "apples"}
+
+
+# =====================================================================
+# Negation Safety Tests
+# =====================================================================
+
+def test_negation_dont_add_milk():
+    """Verify 'don't add milk' returns UNKNOWN / failure and creates ZERO items in DB."""
+    client.post("/api/v1/voice/execute", json={"text": "Delete all items"})
+
+    parse_res = client.post("/api/v1/voice/parse", json={"text": "don't add milk"})
+    assert parse_res.status_code == 200
+    assert parse_res.json()["intent"] == IntentEnum.UNKNOWN
+
+    exec_res = client.post("/api/v1/voice/execute", json={"text": "don't add milk"})
+    assert exec_res.status_code == 200
+    assert exec_res.json()["success"] is False
+
+    items = client.get("/api/v1/items").json()
+    assert len(items) == 0
+
+
+def test_negation_do_not_buy_milk():
+    """Verify 'do not buy milk' creates ZERO items in DB."""
+    client.post("/api/v1/voice/execute", json={"text": "Delete all items"})
+
+    exec_res = client.post("/api/v1/voice/execute", json={"text": "do not buy milk"})
+    assert exec_res.status_code == 200
+    assert exec_res.json()["success"] is False
+
+    items = client.get("/api/v1/items").json()
+    assert len(items) == 0
+
+
+# =====================================================================
+# Self-Repair & Corrections Tests
+# =====================================================================
+
+def test_self_correction_actually():
+    """Verify 'add milk, actually bread' resolves to bread only."""
+    client.post("/api/v1/voice/execute", json={"text": "Delete all items"})
+
+    parse_res = client.post("/api/v1/voice/parse", json={"text": "add milk, actually bread"})
+    assert parse_res.status_code == 200
+    p_data = parse_res.json()
+    assert p_data["intent"] == IntentEnum.ADD_ITEM
+    assert p_data["item"] == "bread"
+
+    exec_res = client.post("/api/v1/voice/execute", json={"text": "add milk, actually bread"})
+    assert exec_res.status_code == 200
+    assert exec_res.json()["success"] is True
+
+    items = client.get("/api/v1/items").json()
+    assert len(items) == 1
+    assert items[0]["item_name"] == "bread"
+
+
+def test_self_correction_sorry_quantity():
+    """Verify 'add 2 apples, sorry, 3 apples' resolves to quantity 3.0."""
+    client.post("/api/v1/voice/execute", json={"text": "Delete all items"})
+
+    exec_res = client.post("/api/v1/voice/execute", json={"text": "add 2 apples, sorry, 3 apples"})
+    assert exec_res.status_code == 200
+    assert exec_res.json()["success"] is True
+
+    items = client.get("/api/v1/items").json()
+    assert len(items) == 1
+    assert items[0]["item_name"] == "apples"
+    assert items[0]["quantity"] == 3.0
+
+
+# =====================================================================
+# Code-Switching & Multilingual Tests
+# =====================================================================
+
+def test_code_switching_malayalam_english_units():
+    """Verify 'രണ്ട് bottles milk ചേർക്കൂ' parses Malayalam quantity and English item/unit."""
+    client.post("/api/v1/voice/execute", json={"text": "Delete all items"})
+
+    parse_res = client.post("/api/v1/voice/parse", json={"text": "രണ്ട് bottles milk ചേർക്കൂ"})
+    assert parse_res.status_code == 200
+    p_data = parse_res.json()
+    assert p_data["intent"] == IntentEnum.ADD_ITEM
+    assert p_data["item"] == "milk"
+    assert p_data["quantity"] == 2.0
+    assert p_data["unit"] == "bottles"
+
+
+def test_code_switching_malayalam_english_milk_cherkku():
+    """Verify 'milk ചേർക്കൂ' parses English item with Malayalam verb."""
+    client.post("/api/v1/voice/execute", json={"text": "Delete all items"})
+
+    parse_res = client.post("/api/v1/voice/parse", json={"text": "milk ചേർക്കൂ"})
+    assert parse_res.status_code == 200
+    p_data = parse_res.json()
+    assert p_data["intent"] == IntentEnum.ADD_ITEM
+    assert p_data["item"] == "milk"
+
+
+def test_conversational_phrases_i_need_milk():
+    """Verify conversational phrase 'I need milk' parses correctly."""
+    client.post("/api/v1/voice/execute", json={"text": "Delete all items"})
+
+    parse_res = client.post("/api/v1/voice/parse", json={"text": "I need milk"})
+    assert parse_res.status_code == 200
+    p_data = parse_res.json()
+    assert p_data["intent"] == IntentEnum.ADD_ITEM
+    assert p_data["item"] == "milk"

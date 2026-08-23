@@ -2,6 +2,12 @@ import re
 import unicodedata
 from typing import Optional, Tuple, Dict, Any, List
 from app.schemas.intent import ParsedIntent, IntentEnum, IntentItem
+from app.services.language_profiles import (
+    parse_multilingual_number,
+    parse_multilingual_unit,
+    detect_negation,
+    apply_corrections
+)
 
 NUMBER_WORDS = {
     "a": 1.0,
@@ -325,9 +331,14 @@ def extract_malayalam_compound_add_items(norm_text: str) -> List[IntentItem]:
                         qty_val = pq
                         toks = toks[1:]
 
-                if toks and toks[0] in MALAYALAM_UNITS_MAP:
-                    unit_val = MALAYALAM_UNITS_MAP[toks[0]]
-                    toks = toks[1:]
+                if toks:
+                    u_cand = toks[0].lower()
+                    if u_cand in MALAYALAM_UNITS_MAP:
+                        unit_val = MALAYALAM_UNITS_MAP[u_cand]
+                        toks = toks[1:]
+                    elif u_cand in UNITS_MAP:
+                        unit_val = UNITS_MAP[u_cand]
+                        toks = toks[1:]
 
                 item_str = " ".join(toks).strip()
                 item_stem = re.sub(r'(?:ഉം|യും|വും)$', '', item_str).strip()
@@ -548,7 +559,7 @@ class NLPService:
     def parse_transcript(transcript: str, language: str = "en-US") -> ParsedIntent:
         """
         Main deterministic parser pipeline:
-        normalization -> intent detection -> entity extraction -> ParsedIntent
+        normalization -> self-repair -> negation check -> intent detection -> entity extraction -> ParsedIntent
         """
         raw_text = transcript
         norm = NLPService.normalize_text(raw_text)
@@ -560,6 +571,19 @@ class NLPService:
                 original_text=raw_text,
                 normalized_text="",
                 message="Empty input command"
+            )
+
+        # Apply self-corrections (e.g. "add milk, actually bread" -> "add bread")
+        norm = apply_corrections(norm)
+
+        # Negation safety gate: Block negated addition commands (e.g. "don't add milk", "do not buy milk")
+        if detect_negation(norm):
+            return ParsedIntent(
+                intent=IntentEnum.UNKNOWN,
+                confidence=0.0,
+                original_text=raw_text,
+                normalized_text=norm,
+                message="Negated command. No items were added."
             )
 
         if contains_malayalam(norm) or contains_malayalam(raw_text):
