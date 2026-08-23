@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useSpeechRecognition } from '../hooks/useSpeechRecognition';
 import { SUPPORTED_LANGUAGES } from '../services/voice';
-import { apiService, CommandExecutionResponse } from '../services/api';
+import { apiService, CommandExecutionResponse, getConversationSessionId } from '../services/api';
 
 export type VoiceState = 'IDLE' | 'LISTENING' | 'PROCESSING' | 'EXECUTING' | 'RESULT' | 'ERROR';
 
@@ -23,7 +23,7 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onCommandExecute
 
     try {
       setVoiceState('EXECUTING');
-      const result = await apiService.executeVoiceCommand(text);
+      const result = await apiService.executeVoiceCommand(text, selectedLanguage, getConversationSessionId());
       setExecutionResult(result);
       setVoiceState('RESULT');
       if (onCommandExecuted) onCommandExecuted();

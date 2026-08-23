@@ -27,6 +27,30 @@ export interface ProductSearchParams {
   availability?: boolean;
 }
 
+const SESSION_KEY = 'voice-shopping-session-id';
+
+export function getConversationSessionId(): string {
+  if (typeof window === 'undefined') {
+    return 'server-session';
+  }
+  let id = sessionStorage.getItem(SESSION_KEY);
+  if (!id) {
+    id =
+      typeof crypto !== 'undefined' && crypto.randomUUID
+        ? crypto.randomUUID()
+        : `session-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+    sessionStorage.setItem(SESSION_KEY, id);
+  }
+  return id;
+}
+
+export function resetConversationSessionId(): string {
+  if (typeof window !== 'undefined') {
+    sessionStorage.removeItem(SESSION_KEY);
+  }
+  return getConversationSessionId();
+}
+
 export const apiService = {
   async getHealth(): Promise<HealthCheckResponse> {
     const response = await fetch('/health');
@@ -123,11 +147,13 @@ export const apiService = {
     return response.json();
   },
 
-  async parseVoiceCommand(text: string): Promise<ParsedIntent> {
+  async parseVoiceCommand(text: string, language?: string, sessionId?: string): Promise<ParsedIntent> {
+    const session_id = sessionId || getConversationSessionId();
+    const lang = language || 'en-US';
     const response = await fetch(`${API_BASE_URL}/voice/parse`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text }),
+      body: JSON.stringify({ text, language: lang, session_id }),
     });
 
     if (!response.ok) {
@@ -139,11 +165,13 @@ export const apiService = {
     return response.json();
   },
 
-  async executeVoiceCommand(text: string): Promise<CommandExecutionResponse> {
+  async executeVoiceCommand(text: string, language?: string, sessionId?: string): Promise<CommandExecutionResponse> {
+    const session_id = sessionId || getConversationSessionId();
+    const lang = language || 'en-US';
     const response = await fetch(`${API_BASE_URL}/voice/execute`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text }),
+      body: JSON.stringify({ text, language: lang, session_id }),
     });
 
     if (!response.ok) {

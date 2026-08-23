@@ -1,3 +1,5 @@
+import time
+import logging
 from typing import Optional, List
 from sqlalchemy.orm import Session
 from sqlalchemy import func
@@ -13,6 +15,8 @@ from app.services.product_service import ProductService
 from app.services.recommendation_service import RecommendationService
 from app.services.checkout_service import CheckoutService
 from app.ai.conversation_manager import conversation_manager
+
+logger = logging.getLogger("voice_service")
 
 class CommandService:
     @staticmethod
@@ -304,14 +308,18 @@ class CommandService:
                 )
 
             cart_hash = CheckoutService.get_cart_hash(db)
+            now_ts = time.time()
             if session_id:
                 session = conversation_manager.get_or_create_session(session_id)
                 if session:
                     session.pending_checkout = {
                         "cart_hash": cart_hash,
                         "total": preview.total,
-                        "item_count": preview.item_count
+                        "item_count": preview.item_count,
+                        "created_at": now_ts,
+                        "expires_at": now_ts + 300.0
                     }
+                    logger.info(f"[Voice] session_id: {session_id} | intent: CHECKOUT | pending_checkout created")
 
             total_fmt = f"₹{int(preview.total)}" if preview.total.is_integer() else f"₹{preview.total:.2f}"
             msg = f"Your total is {total_fmt} for {preview.item_count} items. Would you like me to place the order?"
@@ -328,6 +336,7 @@ class CommandService:
             session = conversation_manager.get_or_create_session(session_id) if session_id else None
 
             if not session or not session.pending_checkout:
+                logger.info(f"[Voice] session_id: {session_id} | intent: CONFIRM_ORDER | pending_checkout found: False")
                 return CommandExecutionResponse(
                     success=False,
                     intent=intent,
@@ -336,8 +345,19 @@ class CommandService:
                 )
 
             pending = session.pending_checkout
+            if pending.get("expires_at") and time.time() > pending["expires_at"]:
+                session.pending_checkout = None
+                logger.info(f"[Voice] session_id: {session_id} | intent: CONFIRM_ORDER | pending_checkout expired")
+                return CommandExecutionResponse(
+                    success=False,
+                    intent=intent,
+                    message="Checkout confirmation has expired. Please say 'checkout' again to review your cart.",
+                    data=None
+                )
+
             if pending.get("cart_hash") != cart_hash:
                 session.pending_checkout = None
+                logger.info(f"[Voice] session_id: {session_id} | intent: CONFIRM_ORDER | cart_hash_valid: False")
                 return CommandExecutionResponse(
                     success=False,
                     intent=intent,
@@ -348,6 +368,7 @@ class CommandService:
             try:
                 order = CheckoutService.place_order(db)
                 session.pending_checkout = None
+                logger.info(f"[Voice] session_id: {session_id} | intent: CONFIRM_ORDER | pending_checkout found: True | cart_hash_valid: True | placing order")
                 order_resp = OrderResponse.model_validate(order).model_dump(mode="json")
                 total_fmt = f"₹{int(order.total)}" if order.total.is_integer() else f"₹{order.total:.2f}"
                 msg = f"Order #{order.order_number} placed successfully! Total: {total_fmt}."

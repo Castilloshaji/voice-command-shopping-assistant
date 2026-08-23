@@ -72,8 +72,7 @@ ENGLISH_PROFILE = LanguageProfile(
         "yogurt": "greek yogurt", "yoghurt": "greek yogurt",
         "chips": "classic potato chips", "toothpaste": "mint toothpaste",
         "soap": "beauty bar soap", "water": "drinking water", "juice": "orange juice",
-        "rice": "white rice", "eggs": "eggs", "egg": "eggs",
-        "coffee": "dark roast coffee", "nuts": "mixed nuts", "towels": "paper towels", "detergent": "liquid laundry detergent"
+        "rice": "white rice", "eggs": "eggs", "egg": "eggs"
     }
 )
 
@@ -99,13 +98,13 @@ MALAYALAM_PROFILE = LanguageProfile(
         "കാർട്ടൺ": "cartons", "കാൻ": "cans", "ബാഗ്": "bags", "ബോക്സ്": "boxes", "ജാർ": "jars", "റോൾ": "rolls"
     },
     filler_words={"ദയവായി", "എനിക്ക്", "എന്റെ", "ലിസ്റ്റിലേക്ക്", "ഷോപ്പിംഗ് ലിസ്റ്റിലേക്ക്"},
-    negation_markers=["വേണ്ട", "ചേർക്കണ്ട", "വാങ്ങണ്ട", "വേണ്ടതില്ല", "ചെക്ക്ഔട്ട് ചെയ്യണ്ട", "ഓർഡർ ചെയ്യണ്ട"],
+    negation_markers=["വേണ്ട", "ചേർക്കണ്ട", "വാങ്ങണ്ട", "വേണ്ടതില്ല", "ചെയ്യണ്ട", "ഇടണ്ട", "ചെക്ക്ഔട്ട് ചെയ്യണ്ട", "ഓർഡർ ചെയ്യണ്ട", "ഓർഡർ വേണ്ട", "ചെക്ക്ഔട്ട് വേണ്ട"],
     correction_markers=["അല്ല", "സോറി", "പകരം"],
     product_aliases={
         "പാൽ": "milk", "പാല്": "milk", "പാലിന്റെ": "milk", "പാലിന്": "milk", "paal": "milk",
         "ആപ്പിൾ": "apples", "ആപ്പിള്": "apples", "ആപ്പിളുകൾ": "apples", "ആപ്പിളിന്റെ": "apples",
         "ഏത്തപ്പഴം": "bananas", "വാഴപ്പഴം": "bananas", "പഴം": "bananas",
-        "തൈര്": "curd", "അരി": "rice", "ബ്രെഡ്": "bread", "റൊട്ടി": "bread",
+        "തൈര്": "yogurt", "അരി": "rice", "ബ്രെഡ്": "bread", "റൊട്ടി": "bread",
         "ചിപ്സ്": "chips", "ടൂത്ത് പേസ്റ്റ്": "toothpaste", "ടൂത്ത്പേസ്റ്റ്": "toothpaste",
         "സോപ്പ്": "soap", "വെള്ളം": "water", "ജ്യൂസ്": "juice", "ചീസ്": "cheese",
         "വെണ്ണ": "butter", "മുട്ട": "eggs", "മുട്ടകൾ": "eggs", "തക്കാളി": "tomatoes",
@@ -145,8 +144,7 @@ def parse_multilingual_unit(token: str) -> Optional[str]:
 
 def detect_negation(text: str) -> bool:
     """
-    Checks if text contains explicit negation command markers across profiles
-    (e.g., "don't add milk", "do not buy milk", "don't need milk" without "anymore").
+    Checks if text contains explicit negation command markers across profiles.
     """
     if not text:
         return False
@@ -163,19 +161,20 @@ def detect_negation(text: str) -> bool:
 def apply_corrections(text: str) -> str:
     """
     Resolves self-corrections deterministically across profiles.
-    Example:
-    - "add milk, actually bread" -> "add bread"
-    - "add milk, no bread" -> "add bread"
-    - "add two apples, sorry, three apples" -> "add three apples"
     """
     if not text:
         return ""
     s = text.strip()
     norm = s.lower()
 
+    # Pattern for Malayalam self-correction e.g. "milk വേണ്ട, bread വേണം"
+    m_ml_neg_corr = re.match(r'(.+?)\s+വേണ്ട,?\s+(.+?\s+(?:വേണം|ചേർക്കൂ|വാങ്ങണം))', s)
+    if m_ml_neg_corr:
+        return m_ml_neg_corr.group(2).strip()
+
     correction_patterns = [
-        r'(.+?),\s*(?:actually|no|sorry|i\s+mean|instead)\s*,?\s*(.+)',
-        r'(.+?)\s+(?:actually|no|sorry|i\s+mean|instead)\s+(.+)'
+        r'(.+?),\s*(?:actually|no|sorry|i\s+mean|instead|അല്ല|സോറി|പകരം)\s*,?\s*(.+)',
+        r'(.+?)\s+(?:actually|no|sorry|i\s+mean|instead|അല്ല|സോറി|പകരം)\s+(.+)'
     ]
 
     for pat in correction_patterns:
