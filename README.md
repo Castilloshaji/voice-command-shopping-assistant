@@ -544,12 +544,4 @@ npm run build
 
 ---
 
-## 25. Development & Git Status
 
-See Git repository history (`git log`) for the latest implementation status and commit trajectory.
-
----
-
-## 26. License
-
-No license has currently been specified.
