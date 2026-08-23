@@ -1,5 +1,5 @@
 from enum import Enum
-from typing import Optional
+from typing import Optional, List
 from pydantic import BaseModel, Field, field_validator
 
 class IntentEnum(str, Enum):
@@ -23,11 +23,17 @@ class VoiceParseRequest(BaseModel):
             raise ValueError("text cannot be empty or whitespace")
         return v
 
+class IntentItem(BaseModel):
+    item: str
+    quantity: float = 1.0
+    unit: Optional[str] = None
+
 class ParsedIntent(BaseModel):
     intent: IntentEnum
     item: Optional[str] = None
     quantity: Optional[float] = None
     unit: Optional[str] = None
+    items: Optional[List[IntentItem]] = None
     max_price: Optional[float] = None
     min_price: Optional[float] = None
     brand: Optional[str] = None

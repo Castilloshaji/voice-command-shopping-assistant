@@ -1,7 +1,7 @@
 import re
 import unicodedata
 from typing import Optional, Tuple, Dict, Any, List
-from app.schemas.intent import ParsedIntent, IntentEnum
+from app.schemas.intent import ParsedIntent, IntentEnum, IntentItem
 
 NUMBER_WORDS = {
     "a": 1.0,
@@ -154,9 +154,14 @@ MALAYALAM_ITEM_MAP = {
 }
 
 MALAYALAM_DIGITS = {
-    '൦': '0', '<ctrl42>': '1', '൨': '2', '൩': '3', '൪': '4',
+    '൦': '0', '൧': '1', '൨': '2', '൩': '3', '൪': '4',
     '൫': '5', '൬': '6', '൭': '7', '൮': '8', '൯': '9'
 }
+
+KNOWN_COMPOUND_PRODUCTS = [
+    "half and half", "mac and cheese", "macaroni and cheese",
+    "salt and pepper", "pork and beans", "fish and chips"
+]
 
 
 def contains_malayalam(text: str) -> bool:
@@ -177,6 +182,133 @@ def parse_malayalam_number(val_str: str) -> Optional[float]:
         return float(s)
     except ValueError:
         return None
+
+
+def extract_compound_add_items(norm_text: str) -> List[IntentItem]:
+    """
+    Parses compound ADD_ITEM text into a list of IntentItem objects.
+    Handles repeated verbs ('add milk add strawberries'), commas, and 'and'.
+    Protects known compound products like 'half and half'.
+    """
+    s = norm_text.strip()
+
+    # Step 1: Protect known compound product names from 'and' splitting
+    protected_map = {}
+    for idx, phrase in enumerate(KNOWN_COMPOUND_PRODUCTS):
+        if phrase in s:
+            placeholder = f"__PROTECTED_COMPOUND_{idx}__"
+            protected_map[placeholder] = phrase
+            s = s.replace(phrase, placeholder)
+
+    # Step 2: Strip leading add triggers
+    s = re.sub(
+        r'^(?:add|i need|i want to buy|buy|please put|put|can you add|add to my list|to my list|on my list|get)\s+',
+        '', s, flags=re.IGNORECASE
+    )
+    s = re.sub(r'\s+(?:on|to)\s+(?:my\s+|the\s+)?(?:shopping\s+)?list$', '', s, flags=re.IGNORECASE)
+    s = s.strip()
+
+    # Step 3: Replace repeated add verbs with standard delimiter ', '
+    s = re.sub(r'(?<=\w)\s+(?:add|buy|need|get|put)\s+', ', ', s, flags=re.IGNORECASE)
+
+    # Step 4: Split into clauses by comma or ' and '
+    s_split = re.sub(r'\s+and\s+', ', ', s, flags=re.IGNORECASE)
+    clauses = [c.strip() for c in s_split.split(',') if c.strip()]
+
+    items: List[IntentItem] = []
+    for clause in clauses:
+        # Restore protected placeholders
+        for ph, orig in protected_map.items():
+            if ph in clause:
+                clause = clause.replace(ph, orig)
+
+        qty, unit, clean_item = NLPService.extract_quantity_unit_item(clause)
+        clean_item = re.sub(r'^(?:add|buy|need|get|put)\s+', '', clean_item, flags=re.IGNORECASE).strip()
+        if clean_item:
+            items.append(IntentItem(item=clean_item, quantity=qty, unit=unit))
+
+    return items
+
+
+def extract_malayalam_compound_add_items(norm_text: str) -> List[IntentItem]:
+    """
+    Parses compound Malayalam ADD_ITEM text into a list of IntentItem objects.
+    """
+    work_text = norm_text
+    work_text = re.sub(r'^(?:എന്റെ\s+)?(?:ലിസ്റ്റിലേക്ക്|ഷോപ്പിംഗ്\s+ലിസ്റ്റിലേക്ക്|എനിക്ക്|ദയവായി)\s+', '', work_text).strip()
+
+    add_verbs = ["ചേർക്കൂ", "ചേർക്കുക", "വാങ്ങണം", "വാങ്ങൂ", "വേണം", "ഉൾപ്പെടുത്തൂ"]
+
+    clauses_raw = []
+    if "," in work_text:
+        clauses_raw = [c.strip() for c in work_text.split(",") if c.strip()]
+    elif any(f" {v} " in work_text for v in add_verbs):
+        for v in add_verbs:
+            work_text = work_text.replace(f" {v} ", " , ")
+        clauses_raw = [c.strip() for c in work_text.split(",") if c.strip()]
+    else:
+        clauses_raw = [work_text]
+
+    items: List[IntentItem] = []
+
+    for clause_str in clauses_raw:
+        c_text = clause_str.strip()
+        has_clause_add_verb = False
+        for v in add_verbs:
+            if c_text.endswith(" " + v) or c_text == v:
+                c_text = re.sub(rf'\s+{re.escape(v)}$', '', c_text).strip()
+                has_clause_add_verb = True
+                break
+
+        tokens = c_text.split()
+        is_conj_tokens = (
+            len(tokens) > 1 and
+            all(t.endswith(("ഉം", "യും", "വും")) for t in tokens) and
+            not any(parse_malayalam_number(t) is not None for t in tokens)
+        )
+
+        if is_conj_tokens:
+            for t in tokens:
+                stem = re.sub(r'(?:ഉം|യും|വും)$', '', t).strip()
+                clean_name = MALAYALAM_ITEM_MAP.get(stem, stem)
+                if clean_name:
+                    items.append(IntentItem(item=clean_name, quantity=1.0, unit=None))
+        else:
+            qty_val: Optional[float] = None
+            unit_val: Optional[str] = None
+            rem_text = c_text
+
+            for num_phrase, num_num in sorted(MALAYALAM_NUMBER_WORDS.items(), key=lambda x: len(x[0]), reverse=True):
+                if rem_text.startswith(num_phrase + " "):
+                    qty_val = num_num
+                    rem_text = rem_text[len(num_phrase):].strip()
+                    break
+
+            toks = rem_text.split()
+            if toks:
+                if qty_val is None:
+                    pq = parse_malayalam_number(toks[0])
+                    if pq is not None:
+                        qty_val = pq
+                        toks = toks[1:]
+
+                if toks and toks[0] in MALAYALAM_UNITS_MAP:
+                    unit_val = MALAYALAM_UNITS_MAP[toks[0]]
+                    toks = toks[1:]
+
+                item_str = " ".join(toks).strip()
+                item_stem = re.sub(r'(?:ഉം|യും|വും)$', '', item_str).strip()
+                clean_item = MALAYALAM_ITEM_MAP.get(item_stem, MALAYALAM_ITEM_MAP.get(item_str))
+                if clean_item is not None or has_clause_add_verb or qty_val is not None or unit_val is not None:
+                    final_item = clean_item if clean_item is not None else item_str
+                    if final_item:
+                        items.append(IntentItem(
+                            item=final_item,
+                            quantity=qty_val if qty_val is not None else 1.0,
+                            unit=unit_val
+                        ))
+
+    return items
 
 
 class NLPService:
@@ -227,7 +359,7 @@ class NLPService:
         s = text.strip()
         
         # Strip common filler prefixes
-        s = re.sub(r'^(?:add|i need|i want to buy|buy|please put|put|can you add|add to my list|to my list|on my list)\s+', '', s, flags=re.IGNORECASE)
+        s = re.sub(r'^(?:add|i need|i want to buy|buy|please put|put|can you add|add to my list|to my list|on my list|get)\s+', '', s, flags=re.IGNORECASE)
         s = re.sub(r'\s+(?:on|to)\s+(?:my\s+|the\s+)?(?:shopping\s+)?list$', '', s, flags=re.IGNORECASE)
         s = s.strip()
 
@@ -355,55 +487,19 @@ class NLPService:
             )
 
         # 6. ADD_ITEM
-        work_text = norm
-        work_text = re.sub(r'^(?:എന്റെ\s+)?(?:ലിസ്റ്റിലേക്ക്|ഷോപ്പിംഗ്\s+ലിസ്റ്റിലേക്ക്|എനിക്ക്|ദയവായി)\s+', '', work_text).strip()
-
-        add_verbs = [
-            "ചേർക്കൂ", "ചേർക്കുക", "വാങ്ങണം", "വാങ്ങൂ", "വേണം", "ഉൾപ്പെടുത്തൂ"
-        ]
-        has_add_verb = False
-        for v in add_verbs:
-            if work_text.endswith(" " + v) or work_text == v:
-                work_text = re.sub(rf'\s+{re.escape(v)}$', '', work_text).strip()
-                has_add_verb = True
-                break
-
-        qty_val: Optional[float] = None
-        unit_val: Optional[str] = None
-        rem_text = work_text
-
-        for num_phrase, num_num in sorted(MALAYALAM_NUMBER_WORDS.items(), key=lambda x: len(x[0]), reverse=True):
-            if rem_text.startswith(num_phrase + " "):
-                qty_val = num_num
-                rem_text = rem_text[len(num_phrase):].strip()
-                break
-
-        tokens = rem_text.split()
-        if tokens:
-            if qty_val is None:
-                parsed_q = parse_malayalam_number(tokens[0])
-                if parsed_q is not None:
-                    qty_val = parsed_q
-                    tokens = tokens[1:]
-
-            if tokens and tokens[0] in MALAYALAM_UNITS_MAP:
-                unit_val = MALAYALAM_UNITS_MAP[tokens[0]]
-                tokens = tokens[1:]
-
-            item_str = " ".join(tokens).strip()
-            clean_item = MALAYALAM_ITEM_MAP.get(item_str, item_str)
-
-            if clean_item in MALAYALAM_ITEM_MAP.values() or item_str in MALAYALAM_ITEM_MAP or has_add_verb or qty_val is not None:
-                if item_str or clean_item:
-                    return ParsedIntent(
-                        intent=IntentEnum.ADD_ITEM,
-                        item=clean_item if clean_item else item_str,
-                        quantity=qty_val if qty_val is not None else 1.0,
-                        unit=unit_val,
-                        confidence=1.0,
-                        original_text=raw_text,
-                        normalized_text=norm
-                    )
+        ml_items = extract_malayalam_compound_add_items(norm)
+        if ml_items:
+            first = ml_items[0]
+            return ParsedIntent(
+                intent=IntentEnum.ADD_ITEM,
+                item=first.item,
+                quantity=first.quantity,
+                unit=first.unit,
+                items=ml_items,
+                confidence=1.0,
+                original_text=raw_text,
+                normalized_text=norm
+            )
 
         # Fallback to UNKNOWN
         return ParsedIntent(
@@ -596,33 +692,21 @@ class NLPService:
         # 7. ADD_ITEM
         add_triggers = [
             r'^add\b', r'^i\s+need\b', r'^i\s+want\s+to\s+buy\b', r'^put\b', r'^buy\b',
-            r'^please\s+put\b', r'^can\s+you\s+add\b'
+            r'^please\s+put\b', r'^can\s+you\s+add\b', r'^get\b'
         ]
         is_add_cmd = any(re.search(pat, norm) for pat in add_triggers)
-        
-        if is_add_cmd:
-            qty, unit, item_name = NLPService.extract_quantity_unit_item(norm)
-            if item_name:
-                return ParsedIntent(
-                    intent=IntentEnum.ADD_ITEM,
-                    item=item_name,
-                    quantity=qty,
-                    unit=unit,
-                    confidence=1.0,
-                    original_text=raw_text,
-                    normalized_text=norm
-                )
-
-        # Direct pattern match for quantities without explicit verb (e.g. "2 bottles of milk", "5 oranges")
         num_start = re.match(r'^(?:\d+|\b(?:one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\b)', norm)
-        if num_start:
-            qty, unit, item_name = NLPService.extract_quantity_unit_item(norm)
-            if item_name:
+
+        if is_add_cmd or num_start:
+            extracted_items = extract_compound_add_items(norm)
+            if extracted_items:
+                first = extracted_items[0]
                 return ParsedIntent(
                     intent=IntentEnum.ADD_ITEM,
-                    item=item_name,
-                    quantity=qty,
-                    unit=unit,
+                    item=first.item,
+                    quantity=first.quantity,
+                    unit=first.unit,
+                    items=extracted_items,
                     confidence=1.0,
                     original_text=raw_text,
                     normalized_text=norm

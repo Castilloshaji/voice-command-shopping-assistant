@@ -1,8 +1,8 @@
-from typing import Optional
+from typing import Optional, List
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from app.models.shopping_list import ListItem
-from app.schemas.intent import ParsedIntent, IntentEnum
+from app.schemas.intent import ParsedIntent, IntentEnum, IntentItem
 from app.schemas.command import CommandExecutionResponse
 from app.schemas.shopping_list import ListItemCreate, ListItemUpdate, ListItemResponse
 from app.schemas.product import ProductResponse
@@ -20,40 +20,89 @@ class CommandService:
 
         # 1. ADD_ITEM
         if intent == IntentEnum.ADD_ITEM:
-            if not parsed.item:
+            target_items: List[IntentItem] = []
+            if parsed.items:
+                target_items = parsed.items
+            elif parsed.item:
+                target_items = [IntentItem(
+                    item=parsed.item,
+                    quantity=parsed.quantity if parsed.quantity is not None else 1.0,
+                    unit=parsed.unit
+                )]
+
+            if not target_items:
                 return CommandExecutionResponse(
                     success=False,
                     intent=intent,
                     message="Item name is required for addition.",
                     data=None
                 )
-            
-            qty = parsed.quantity if parsed.quantity is not None else 1.0
-            unit = parsed.unit
 
-            # Check if active item existed prior to creation for clear messaging
-            clean_item_name = parsed.item.strip().lower()
-            existed_active = db.query(ListItem).filter(
-                ListItem.is_completed == False,
-                func.lower(ListItem.item_name) == clean_item_name
-            ).first()
+            # Single item execution - preserve exact messaging & data format for single item tests
+            if len(target_items) == 1:
+                item_info = target_items[0]
+                qty = item_info.quantity if item_info.quantity is not None else 1.0
+                unit = item_info.unit
 
-            item_obj = ShoppingListService.create_item(
-                db,
-                ListItemCreate(item_name=parsed.item, quantity=qty, unit=unit)
-            )
+                clean_item_name = item_info.item.strip().lower()
+                existed_active = db.query(ListItem).filter(
+                    ListItem.is_completed == False,
+                    func.lower(ListItem.item_name) == clean_item_name
+                ).first()
 
-            unit_str = f" {item_obj.unit}" if item_obj.unit else ""
-            if existed_active:
-                msg = f"Updated '{item_obj.item_name}' quantity to {item_obj.quantity}{unit_str} on your shopping list."
+                item_obj = ShoppingListService.create_item(
+                    db,
+                    ListItemCreate(item_name=item_info.item, quantity=qty, unit=unit)
+                )
+
+                unit_str = f" {item_obj.unit}" if item_obj.unit else ""
+                if existed_active:
+                    msg = f"Updated '{item_obj.item_name}' quantity to {item_obj.quantity}{unit_str} on your shopping list."
+                else:
+                    msg = f"Added {item_obj.quantity}{unit_str} '{item_obj.item_name}' to your shopping list."
+
+                return CommandExecutionResponse(
+                    success=True,
+                    intent=intent,
+                    message=msg,
+                    data=ListItemResponse.model_validate(item_obj).model_dump(mode="json")
+                )
+
+            # Compound items execution (multiple additions)
+            created_objects = []
+            item_phrases = []
+
+            for item_info in target_items:
+                qty = item_info.quantity if item_info.quantity is not None else 1.0
+                unit = item_info.unit
+
+                item_obj = ShoppingListService.create_item(
+                    db,
+                    ListItemCreate(item_name=item_info.item, quantity=qty, unit=unit)
+                )
+                created_objects.append(item_obj)
+
+                # Build phrase for message
+                if qty != 1.0 or unit:
+                    unit_str = f" {unit}" if unit else ""
+                    qty_str = f"{int(qty)}" if qty.is_integer() else f"{qty}"
+                    item_phrases.append(f"{qty_str}{unit_str} of {item_obj.item_name}" if unit else f"{qty_str} {item_obj.item_name}")
+                else:
+                    item_phrases.append(item_obj.item_name)
+
+            if len(item_phrases) == 2:
+                joined_phrases = " and ".join(item_phrases)
             else:
-                msg = f"Added {item_obj.quantity}{unit_str} '{item_obj.item_name}' to your shopping list."
+                joined_phrases = ", ".join(item_phrases[:-1]) + f", and {item_phrases[-1]}"
+
+            msg = f"Added {joined_phrases} to your shopping list."
+            data_list = [ListItemResponse.model_validate(obj).model_dump(mode="json") for obj in created_objects]
 
             return CommandExecutionResponse(
                 success=True,
                 intent=intent,
                 message=msg,
-                data=ListItemResponse.model_validate(item_obj).model_dump(mode="json")
+                data=data_list
             )
 
         # 2. REMOVE_ITEM
