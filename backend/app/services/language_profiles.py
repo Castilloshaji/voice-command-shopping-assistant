@@ -55,7 +55,12 @@ ENGLISH_PROFILE = LanguageProfile(
         "bar": "bars", "bars": "bars", "roll": "rolls", "rolls": "rolls"
     },
     filler_words={"please", "can you", "could you", "i need", "i want", "i would like", "to my list", "on my list", "shopping list", "uh", "um", "you know", "okay", "like"},
-    negation_markers=["don't add", "do not add", "dont add", "don't buy", "do not buy", "dont buy", "don't need", "do not need", "dont need"],
+    negation_markers=[
+        "don't add", "do not add", "dont add", "don't buy", "do not buy", "dont buy",
+        "don't need", "do not need", "dont need", "don't checkout", "do not checkout",
+        "dont checkout", "don't place", "do not place", "dont place", "don't want to checkout",
+        "don't want to place", "i don't want to checkout", "i don't want to place"
+    ],
     correction_markers=["actually", "no", "sorry", "i mean", "instead"],
     product_aliases={
         "milk": "whole milk",
@@ -94,7 +99,7 @@ MALAYALAM_PROFILE = LanguageProfile(
         "കാർട്ടൺ": "cartons", "കാൻ": "cans", "ബാഗ്": "bags", "ബോക്സ്": "boxes", "ജാർ": "jars", "റോൾ": "rolls"
     },
     filler_words={"ദയവായി", "എനിക്ക്", "എന്റെ", "ലിസ്റ്റിലേക്ക്", "ഷോപ്പിംഗ് ലിസ്റ്റിലേക്ക്"},
-    negation_markers=["വേണ്ട", "ചേർക്കണ്ട", "വാങ്ങണ്ട", "വേണ്ടതില്ല"],
+    negation_markers=["വേണ്ട", "ചേർക്കണ്ട", "വാങ്ങണ്ട", "വേണ്ടതില്ല", "ചെക്ക്ഔട്ട് ചെയ്യണ്ട", "ഓർഡർ ചെയ്യണ്ട"],
     correction_markers=["അല്ല", "സോറി", "പകരം"],
     product_aliases={
         "പാൽ": "milk", "പാല്": "milk", "പാലിന്റെ": "milk", "പാലിന്": "milk", "paal": "milk",

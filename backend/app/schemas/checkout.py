@@ -21,6 +21,7 @@ class CheckoutPreviewResponse(BaseModel):
     total: float
     item_count: int
     has_unavailable: bool = False
+    currency: str = "INR"
 
 
 class OrderItemResponse(BaseModel):
@@ -47,4 +48,5 @@ class OrderResponse(BaseModel):
     discount: float
     total: float
     created_at: datetime
+    currency: str = "INR"
     items: List[OrderItemResponse]

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Order } from '../types/checkout';
 import { apiService } from '../services/api';
 import { OrderDetails } from './OrderDetails';
+import { formatCurrency } from '../utils/currency';
 
 export const OrderHistory: React.FC = () => {
   const [orders, setOrders] = useState<Order[]>([]);
@@ -72,7 +73,7 @@ export const OrderHistory: React.FC = () => {
 
               <div className="order-meta">
                 <span className="item-count">{order.items.length} items</span>
-                <span className="order-total">₹{order.total}</span>
+                <span className="order-total">{formatCurrency(order.total)}</span>
                 <span className="badge badge-success">{order.status}</span>
               </div>
 

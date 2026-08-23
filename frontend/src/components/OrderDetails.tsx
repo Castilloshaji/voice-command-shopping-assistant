@@ -1,5 +1,6 @@
 import React from 'react';
 import { Order } from '../types/checkout';
+import { formatCurrency } from '../utils/currency';
 
 interface OrderDetailsProps {
   order: Order | null;
@@ -58,11 +59,11 @@ export const OrderDetails: React.FC<OrderDetailsProps> = ({ order, isOpen, onClo
                   <strong>{item.product_name_snapshot}</strong>
                   {item.brand_snapshot && <span className="item-brand"> &bull; {item.brand_snapshot}</span>}
                   <p className="qty-unit-snapshot">
-                    {item.quantity} {item.unit || ''} &times; ₹{item.unit_price}
+                    {item.quantity} {item.unit || ''} &times; {formatCurrency(item.unit_price)}
                   </p>
                 </div>
                 <div className="item-price">
-                  <span>₹{item.line_total}</span>
+                  <span>{formatCurrency(item.line_total)}</span>
                 </div>
               </div>
             ))}
@@ -71,15 +72,15 @@ export const OrderDetails: React.FC<OrderDetailsProps> = ({ order, isOpen, onClo
           <div className="order-summary-box">
             <div className="summary-row">
               <span>Subtotal</span>
-              <span>₹{order.subtotal}</span>
+              <span>{formatCurrency(order.subtotal)}</span>
             </div>
             <div className="summary-row">
               <span>Discount</span>
-              <span>₹{order.discount}</span>
+              <span>{formatCurrency(order.discount)}</span>
             </div>
             <div className="summary-row total-row">
               <strong>Total</strong>
-              <strong>₹{order.total}</strong>
+              <strong>{formatCurrency(order.total)}</strong>
             </div>
           </div>
         </div>

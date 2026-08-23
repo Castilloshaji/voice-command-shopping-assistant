@@ -299,3 +299,96 @@ def test_negation_checkout_safety(client: TestClient, negation_phrase: str):
 def test_catalog_category_search_regression(client: TestClient, query: str, expected_category: str):
     res = client.get(f"/api/v1/products?query={query}").json()
     assert len(res) > 0, f"Query '{query}' returned 0 products"
+
+
+# ============================================================
+# NATURAL CHECKOUT NLP VARIATIONS & CURRENCY TESTS
+# ============================================================
+
+@pytest.mark.parametrize("checkout_phrase", [
+    "checkout",
+    "check out",
+    "place the order",
+    "place my order",
+    "place an order",
+    "I want to place the order",
+    "I want to place my order",
+    "I want to checkout",
+    "I'd like to place an order",
+    "I would like to place an order",
+    "please place the order",
+    "please checkout",
+    "can you place the order",
+    "could you place my order",
+    "proceed to checkout",
+    "complete my order",
+    "finish my order",
+    "buy everything in my cart",
+    "buy everything on my list",
+    "order everything",
+    "order my groceries",
+    "let's checkout",
+    "I'm ready to checkout"
+])
+def test_english_natural_checkout_phrases(client: TestClient, checkout_phrase: str):
+    client.post("/api/v1/items", json={"item_name": "whole milk", "quantity": 1.0})
+    res = client.post("/api/v1/voice/execute", json={"text": checkout_phrase}).json()
+    assert res["success"] is True
+    assert res["intent"] == "CHECKOUT"
+    assert "₹" in res["message"]
+    assert "$" not in res["message"]
+
+
+@pytest.mark.parametrize("ml_checkout_phrase", [
+    "checkout ചെയ്യൂ",
+    "checkout ചെയ്യണം",
+    "order place ചെയ്യൂ",
+    "എന്റെ order place ചെയ്യൂ",
+    "എന്റെ ഓർഡർ പ്ലേസ് ചെയ്യൂ",
+    "ഓർഡർ ചെയ്യൂ",
+    "ഓർഡർ place ചെയ്യണം",
+    "എന്റെ ഓർഡർ ഇടൂ",
+    "എന്റെ cart checkout ചെയ്യൂ",
+    "എന്റെ order place ചെയ്യണം",
+    "എന്റെ groceries order ചെയ്യൂ"
+])
+def test_malayalam_natural_checkout_phrases(client: TestClient, ml_checkout_phrase: str):
+    client.post("/api/v1/items", json={"item_name": "whole milk", "quantity": 1.0})
+    res = client.post("/api/v1/voice/execute", json={"text": ml_checkout_phrase, "language": "ml-IN"}).json()
+    assert res["success"] is True
+    assert res["intent"] == "CHECKOUT"
+    assert "₹" in res["message"]
+
+
+@pytest.mark.parametrize("neg_phrase", [
+    "don't checkout",
+    "do not checkout",
+    "don't place the order",
+    "do not place the order",
+    "I don't want to checkout"
+])
+def test_negation_checkout_safety_extended(client: TestClient, neg_phrase: str):
+    client.post("/api/v1/items", json={"item_name": "whole milk", "quantity": 1.0})
+    res = client.post("/api/v1/voice/execute", json={"text": neg_phrase}).json()
+    assert len(client.get("/api/v1/orders").json()) == 0
+
+
+def test_checkout_confirmation_separation_and_currency(client: TestClient):
+    client.post("/api/v1/items", json={"item_name": "whole milk", "quantity": 1.0})
+
+    # "place the order" returns CHECKOUT, not CONFIRM_ORDER
+    res_chk = client.post("/api/v1/voice/execute", json={"text": "place the order", "session_id": "sess-sep-1"}).json()
+    assert res_chk["intent"] == "CHECKOUT"
+    assert "₹" in res_chk["message"]
+    assert len(client.get("/api/v1/orders").json()) == 0
+
+    # "yes" places order
+    res_conf = client.post("/api/v1/voice/execute", json={"text": "yes", "session_id": "sess-sep-1"}).json()
+    assert res_conf["intent"] == "CONFIRM_ORDER"
+    assert "₹" in res_conf["message"]
+    assert len(client.get("/api/v1/orders").json()) == 1
+
+    # Repeat "yes" rejects duplicate placement
+    res_repeat = client.post("/api/v1/voice/execute", json={"text": "yes", "session_id": "sess-sep-1"}).json()
+    assert res_repeat["success"] is False
+    assert len(client.get("/api/v1/orders").json()) == 1

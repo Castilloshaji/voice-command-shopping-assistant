@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { apiService, ProductSearchParams } from '../services/api';
 import { Product } from '../types/product';
+import { formatCurrency } from '../utils/currency';
 
 interface ProductSearchProps {
   onItemAdded?: () => void;
@@ -132,9 +133,9 @@ export const ProductSearch: React.FC<ProductSearchProps> = ({ onItemAdded }) => 
           <button
             type="button"
             className="tag-btn"
-            onClick={() => handleQuickFilter(undefined, 5.0)}
+            onClick={() => handleQuickFilter(undefined, 100.0)}
           >
-            Under $5
+            Under ₹100
           </button>
           <button
             type="button"
@@ -177,7 +178,7 @@ export const ProductSearch: React.FC<ProductSearchProps> = ({ onItemAdded }) => 
             <div key={prod.id} className={`product-card ${!prod.is_available ? 'unavailable-card' : ''}`}>
               <div className="product-card-header">
                 <h3 className="product-card-name">{prod.name}</h3>
-                <span className="product-card-price">${prod.price.toFixed(2)}</span>
+                <span className="product-card-price">{formatCurrency(prod.price)}</span>
               </div>
 
               <div className="product-card-meta">
@@ -213,7 +214,7 @@ export const ProductSearch: React.FC<ProductSearchProps> = ({ onItemAdded }) => 
                       {prod.substitute_products.map((sub) => (
                         <li key={sub.id} className="substitute-row">
                           <span className="sub-name">↪ {sub.name}</span>
-                          <span className="sub-price">${sub.price.toFixed(2)}</span>
+                          <span className="sub-price">{formatCurrency(sub.price)}</span>
                           <button
                             type="button"
                             className="btn btn-xs btn-outline-success"

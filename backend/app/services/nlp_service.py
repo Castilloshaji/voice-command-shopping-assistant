@@ -628,22 +628,20 @@ class NLPService:
                 message="Negated command. No items were added."
             )
 
-        if contains_malayalam(norm) or contains_malayalam(raw_text):
-            return NLPService.parse_malayalam_transcript(raw_text, norm)
-
-        # 0. CHECKOUT / CANCEL / CONFIRM
+        # 0. CHECKOUT / CANCEL / CONFIRM (Top-level check for English, Malayalam, and Code-Switching)
         checkout_patterns = [
-            r'^(?:i\s+want\s+to\s+)?check\s*out$',
-            r'^(?:please\s+)?place\s+(?:my\s+)?order$',
-            r'^buy\s+everything(?:\s+on\s+my\s+list)?$',
+            r'\b(?:place|complete|finish|submit)\s+(?:the|my|an|a)?\s*order\b',
+            r'\b(?:check\s*out|checkout)\b',
+            r'\b(?:buy|order)\s+(?:everything|all|my\s+groceries)(?:\s+(?:in|on)\s+(?:my|the)\s+(?:cart|list))?\b',
+            r'(?:order|ഓർഡർ|ഓര്ഡര്)\s*(?:place|പ്ലേസ്|ചെയ്യൂ|ചെയ്യണം|ചെയ്യുക|ഇടൂ|ആക്കൂ)',
+            r'(?:cart|groceries)\s*(?:checkout|order)',
+            r'cart\s*(?:total\s*)?(?:എത്രയാണ്|കാണിക്കൂ|കാണിക്കുക|മൊത്തം|total)',
+            r'മൊത്തം\s+എത്രയാണ്',
+            r'ചെക്ക്\s*ഔട്ട്',
             r'^(?:how\s+much\s+is|what\s*\'?s)\s+(?:my\s+)?cart(?:\s+total)?$',
             r'^(?:how\s+much\s+is|what\s*\'?s)\s+my\s+total$',
             r'^what\s+is\s+(?:the\s+|my\s+)?total\??$',
-            r'^how\s+much\s+will\s+everything\s+cost\??$',
-            r'^(?:show\s+me\s+)?checkout$',
-            r'checkout\s*(?:ചെയ്യൂ|ചെയ്യുക|ആക്കൂ)?',
-            r'order\s*place\s*(?:ചെയ്യൂ|ചെയ്യുക)?',
-            r'cart\s*(?:total\s*)?എത്രയാണ്'
+            r'^how\s+much\s+will\s+everything\s+cost\??$'
         ]
         for pat in checkout_patterns:
             if re.search(pat, norm, flags=re.IGNORECASE):
@@ -655,7 +653,7 @@ class NLPService:
                 )
 
         cancel_patterns = [
-            r'^(?:no|cancel|stop|don\'t\s+checkout|do\s+not\s+checkout|do\s+not\s+place\s+my\s+order|don\'t\s+place\s+my\s+order|i\s+don\'t\s+want\s+to\s+buy\s+these)$'
+            r'^(?:no|cancel|stop|don\'t\s+checkout|do\s+not\s+checkout|do\s+not\s+place\s+my\s+order|don\'t\s+place\s+my\s+order|don\'t\s+place\s+the\s+order|do\s+not\s+place\s+the\s+order|i\s+don\'t\s+want\s+to\s+checkout|i\s+don\'t\s+want\s+to\s+place\s+my\s+order|i\s+don\'t\s+want\s+to\s+buy\s+these|വേണ്ട|ഇല്ല|വേണ്ടതില്ല|നിർത്തൂ)$'
         ]
         for pat in cancel_patterns:
             if re.search(pat, norm, flags=re.IGNORECASE):
@@ -667,7 +665,7 @@ class NLPService:
                 )
 
         confirm_patterns = [
-            r'^(?:yes|confirm|place\s+it|yeah|sure|ok|okay)$'
+            r'^(?:yes|yes\s+please|confirm|confirm\s+it|place\s+it|go\s+ahead|do\s+it|yeah|sure|ok|okay|ആതെ|അതെ|ശരി|തീർച്ചയായും|ഉവ്വ്|confirm\s*ചെയ്യൂ)$'
         ]
         for pat in confirm_patterns:
             if re.search(pat, norm, flags=re.IGNORECASE):
@@ -677,6 +675,9 @@ class NLPService:
                     original_text=raw_text,
                     normalized_text=norm
                 )
+
+        if contains_malayalam(norm) or contains_malayalam(raw_text):
+            return NLPService.parse_malayalam_transcript(raw_text, norm)
 
         # 1. CLEAR_LIST (Explicit match)
         clear_patterns = [
@@ -763,28 +764,31 @@ class NLPService:
 
             num_expr = r'(?:\d+(?:\.\d+)?|\b(?:one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|fifteen|twenty|thirty|fifty)\b)'
 
-            m_between = re.search(rf'between\s+\$?({num_expr})\s+and\s+\$?({num_expr})(?:\s+dollars?)?', norm_search)
+            curr_sym = r'[\$₹]?'
+            curr_unit = r'(?:\s+(?:dollars?|rupees?|rs\.?))?'
+
+            m_between = re.search(rf'between\s+{curr_sym}({num_expr})\s+and\s+{curr_sym}({num_expr}){curr_unit}', norm_search)
             if m_between:
                 val1 = NLPService.parse_number(m_between.group(1))
                 val2 = NLPService.parse_number(m_between.group(2))
                 if val1 is not None and val2 is not None:
                     min_price = min(val1, val2)
                     max_price = max(val1, val2)
-                    norm_search = re.sub(rf'between\s+\$?{num_expr}\s+and\s+\$?{num_expr}(?:\s+dollars?)?', '', norm_search).strip()
+                    norm_search = re.sub(rf'between\s+{curr_sym}{num_expr}\s+and\s+{curr_sym}{num_expr}{curr_unit}', '', norm_search).strip()
             else:
-                m_max = re.search(rf'(?:under|below|less\s+than|up\s+to)\s+\$?({num_expr})(?:\s+dollars?)?', norm_search)
+                m_max = re.search(rf'(?:under|below|less\s+than|up\s+to)\s+{curr_sym}({num_expr}){curr_unit}', norm_search)
                 if m_max:
                     val_max = NLPService.parse_number(m_max.group(1))
                     if val_max is not None:
                         max_price = val_max
-                        norm_search = re.sub(rf'(?:under|below|less\s+than|up\s+to)\s+\$?{num_expr}(?:\s+dollars?)?', '', norm_search).strip()
+                        norm_search = re.sub(rf'(?:under|below|less\s+than|up\s+to)\s+{curr_sym}{num_expr}{curr_unit}', '', norm_search).strip()
                 else:
-                    m_min = re.search(rf'(?:above|over|more\s+than|at\s+least)\s+\$?({num_expr})(?:\s+dollars?)?', norm_search)
+                    m_min = re.search(rf'(?:above|over|more\s+than|at\s+least)\s+{curr_sym}({num_expr}){curr_unit}', norm_search)
                     if m_min:
                         val_min = NLPService.parse_number(m_min.group(1))
                         if val_min is not None:
                             min_price = val_min
-                            norm_search = re.sub(rf'(?:above|over|more\s+than|at\s+least)\s+\$?{num_expr}(?:\s+dollars?)?', '', norm_search).strip()
+                            norm_search = re.sub(rf'(?:above|over|more\s+than|at\s+least)\s+{curr_sym}{num_expr}{curr_unit}', '', norm_search).strip()
 
             # Step C: Extract brand filter
             brand: Optional[str] = None

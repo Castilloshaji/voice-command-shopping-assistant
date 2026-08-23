@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { CheckoutPreview, Order } from '../types/checkout';
 import { apiService } from '../services/api';
+import { formatCurrency } from '../utils/currency';
 
 interface CheckoutProps {
   isOpen: boolean;
@@ -121,12 +122,12 @@ export const Checkout: React.FC<CheckoutProps> = ({
                             <h3 className="item-name">{item.name}</h3>
                             {item.brand && <span className="item-brand">{item.brand}</span>}
                             <p className="item-qty-price">
-                              {item.quantity} {item.unit || ''} &times; ₹{item.unit_price}
+                              {item.quantity} {item.unit || ''} &times; {formatCurrency(item.unit_price)}
                             </p>
                           </div>
 
                           <div className="item-price-status">
-                            <span className="line-total">₹{item.line_total}</span>
+                            <span className="line-total">{formatCurrency(item.line_total)}</span>
                             {!item.is_available && (
                               <span className="badge badge-unavailable">UNAVAILABLE</span>
                             )}
@@ -137,7 +138,7 @@ export const Checkout: React.FC<CheckoutProps> = ({
                               <p className="substitute-label">Possible substitute:</p>
                               {item.substitutes.slice(0, 1).map((sub) => (
                                 <div key={sub.product_id} className="substitute-row">
-                                  <span>{sub.name} &mdash; ₹{sub.price}</span>
+                                  <span>{sub.name} &mdash; {formatCurrency(sub.price)}</span>
                                   <button
                                     type="button"
                                     className="btn btn-sm btn-outline"
@@ -157,15 +158,15 @@ export const Checkout: React.FC<CheckoutProps> = ({
                   <div className="checkout-summary">
                     <div className="summary-row">
                       <span>Subtotal</span>
-                      <span>₹{preview.subtotal}</span>
+                      <span>{formatCurrency(preview.subtotal)}</span>
                     </div>
                     <div className="summary-row">
                       <span>Savings</span>
-                      <span>₹{preview.discount}</span>
+                      <span>{formatCurrency(preview.discount)}</span>
                     </div>
                     <div className="summary-row total-row">
                       <strong>Total</strong>
-                      <strong>₹{preview.total}</strong>
+                      <strong>{formatCurrency(preview.total)}</strong>
                     </div>
                   </div>
                 </>
@@ -199,7 +200,7 @@ export const Checkout: React.FC<CheckoutProps> = ({
             <h2>Order placed successfully!</h2>
             <p className="order-number">Order #{placedOrder.order_number}</p>
             <p className="order-info">
-              {placedOrder.items.length} items &bull; Total ₹{placedOrder.total}
+              {placedOrder.items.length} items &bull; Total {formatCurrency(placedOrder.total)}
             </p>
             <p className="order-subtext">Your grocery order has been recorded.</p>
 
