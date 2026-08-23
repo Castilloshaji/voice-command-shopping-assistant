@@ -187,7 +187,7 @@ def parse_malayalam_number(val_str: str) -> Optional[float]:
 def extract_compound_add_items(norm_text: str) -> List[IntentItem]:
     """
     Parses compound ADD_ITEM text into a list of IntentItem objects.
-    Handles repeated verbs ('add milk add strawberries'), commas, and 'and'.
+    Handles conversational speech, 'then', 'and then', 'add to', repeated verbs, commas, and 'and'.
     Protects known compound products like 'half and half'.
     """
     s = norm_text.strip()
@@ -200,20 +200,29 @@ def extract_compound_add_items(norm_text: str) -> List[IntentItem]:
             protected_map[placeholder] = phrase
             s = s.replace(phrase, placeholder)
 
-    # Step 2: Strip leading add triggers
+    # Step 2: Strip initial add command triggers at the very beginning of the full command
     s = re.sub(
-        r'^(?:add|i need|i want to buy|buy|please put|put|can you add|add to my list|to my list|on my list|get)\s+',
+        r'^(?:i\s+want\s+to\s+buy|i\s+need|can\s+you\s+add|please\s+put|please\s+add|add\s+to|add|buy\s+to|buy|need\s+to|need|get\s+to|get|put)\s+',
         '', s, flags=re.IGNORECASE
     )
     s = re.sub(r'\s+(?:on|to)\s+(?:my\s+|the\s+)?(?:shopping\s+)?list$', '', s, flags=re.IGNORECASE)
     s = s.strip()
 
-    # Step 3: Replace repeated add verbs with standard delimiter ', '
-    s = re.sub(r'(?<=\w)\s+(?:add|buy|need|get|put)\s+', ', ', s, flags=re.IGNORECASE)
+    # Step 3: Normalize remaining conversational 'add to' / 'buy to'
+    s = re.sub(r'\b(?:please\s+)?(?:add|buy|need|get|put)\s+to\b', 'add', s, flags=re.IGNORECASE)
 
-    # Step 4: Split into clauses by comma or ' and '
-    s_split = re.sub(r'\s+and\s+', ', ', s, flags=re.IGNORECASE)
-    clauses = [c.strip() for c in s_split.split(',') if c.strip()]
+    # Step 4: Replace clause boundary connectors with standard comma delimiter ', '
+    # Handle 'and then', 'then', ', then', ', and then'
+    s = re.sub(r'[\s,]+(?:and\s+)?then(?:\s+(?:add|buy|need|get|put)(?:\s+to)?)?', ', ', s, flags=re.IGNORECASE)
+
+    # Handle repeated verb triggers e.g., "milk add strawberries" -> "milk, strawberries"
+    s = re.sub(r'(?<=\w)\s+(?:add|buy|need|get|put)(?:\s+to)?\s+', ', ', s, flags=re.IGNORECASE)
+
+    # Handle 'and' separators e.g., "strawberries and yoghurt" -> "strawberries, yoghurt"
+    s = re.sub(r'\s+and\s+', ', ', s, flags=re.IGNORECASE)
+
+    # Step 5: Split into individual raw clauses by comma
+    clauses = [c.strip() for c in s.split(',') if c.strip()]
 
     items: List[IntentItem] = []
     for clause in clauses:
@@ -222,8 +231,32 @@ def extract_compound_add_items(norm_text: str) -> List[IntentItem]:
             if ph in clause:
                 clause = clause.replace(ph, orig)
 
+        # Strip filler prefixes from clause
+        clause = re.sub(
+            r'^(?:please|add|buy|need|get|put|i\s+need|i\s+want\s+to\s+buy|can\s+you\s+add|to|the|then)\s+',
+            '', clause, flags=re.IGNORECASE
+        ).strip()
+
+        # Strip trailing filler words from clause
+        clause = re.sub(r'\s+(?:then|please|to)$', '', clause, flags=re.IGNORECASE).strip()
+
+        if not clause:
+            continue
+
         qty, unit, clean_item = NLPService.extract_quantity_unit_item(clause)
-        clean_item = re.sub(r'^(?:add|buy|need|get|put)\s+', '', clean_item, flags=re.IGNORECASE).strip()
+
+        # Clean item of any remaining filler words at start/end
+        clean_item = re.sub(
+            r'^(?:please|add|buy|need|get|put|to|the|then)\s+',
+            '', clean_item, flags=re.IGNORECASE
+        ).strip()
+        clean_item = re.sub(r'\s+(?:then|please|to)$', '', clean_item, flags=re.IGNORECASE).strip()
+
+        # Restore protected placeholders if inside clean_item
+        for ph, orig in protected_map.items():
+            if ph in clean_item:
+                clean_item = clean_item.replace(ph, orig)
+
         if clean_item:
             items.append(IntentItem(item=clean_item, quantity=qty, unit=unit))
 
@@ -358,9 +391,10 @@ class NLPService:
         """
         s = text.strip()
         
-        # Strip common filler prefixes
-        s = re.sub(r'^(?:add|i need|i want to buy|buy|please put|put|can you add|add to my list|to my list|on my list|get)\s+', '', s, flags=re.IGNORECASE)
+        # Strip common filler prefixes and suffixes
+        s = re.sub(r'^(?:please|add|i need|i want to buy|buy|please put|put|can you add|add to my list|to my list|on my list|get|to|the)\s+', '', s, flags=re.IGNORECASE)
         s = re.sub(r'\s+(?:on|to)\s+(?:my\s+|the\s+)?(?:shopping\s+)?list$', '', s, flags=re.IGNORECASE)
+        s = re.sub(r'\s+(?:then|please|to)$', '', s, flags=re.IGNORECASE)
         s = s.strip()
 
         units_pattern = r'|'.join(re.escape(u) for u in sorted(UNITS_MAP.keys(), key=len, reverse=True))
