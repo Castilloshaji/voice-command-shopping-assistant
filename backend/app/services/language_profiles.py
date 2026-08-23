@@ -58,16 +58,17 @@ ENGLISH_PROFILE = LanguageProfile(
     negation_markers=["don't add", "do not add", "dont add", "don't buy", "do not buy", "dont buy", "don't need", "do not need", "dont need"],
     correction_markers=["actually", "no", "sorry", "i mean", "instead"],
     product_aliases={
-        "milk": "milk",
-        "strawberries": "strawberries", "strawberry": "strawberries",
-        "apples": "apples", "apple": "apples",
-        "bananas": "bananas", "banana": "bananas",
-        "bread": "bread", "loaf": "bread",
-        "cheese": "cheese", "butter": "butter",
-        "yogurt": "yogurt", "yoghurt": "yogurt",
-        "chips": "chips", "toothpaste": "toothpaste",
-        "soap": "soap", "water": "water", "juice": "juice",
-        "coffee": "coffee", "nuts": "nuts", "towels": "towels", "detergent": "detergent"
+        "milk": "whole milk",
+        "strawberries": "organic strawberries", "strawberry": "organic strawberries",
+        "apples": "gala apples", "apple": "gala apples",
+        "bananas": "fresh bananas", "banana": "fresh bananas",
+        "bread": "whole wheat bread", "loaf": "whole wheat bread",
+        "cheese": "cheddar cheese", "butter": "unsalted butter",
+        "yogurt": "greek yogurt", "yoghurt": "greek yogurt",
+        "chips": "classic potato chips", "toothpaste": "mint toothpaste",
+        "soap": "beauty bar soap", "water": "drinking water", "juice": "orange juice",
+        "rice": "white rice", "eggs": "eggs", "egg": "eggs",
+        "coffee": "dark roast coffee", "nuts": "mixed nuts", "towels": "paper towels", "detergent": "liquid laundry detergent"
     }
 )
 
@@ -96,14 +97,15 @@ MALAYALAM_PROFILE = LanguageProfile(
     negation_markers=["വേണ്ട", "ചേർക്കണ്ട", "വാങ്ങണ്ട", "വേണ്ടതില്ല"],
     correction_markers=["അല്ല", "സോറി", "പകരം"],
     product_aliases={
-        "പാൽ": "milk", "പാലിന്റെ": "milk", "പാലിന്": "milk", "paal": "milk",
-        "ആപ്പിൾ": "apples", "ആപ്പിളുകൾ": "apples", "ആപ്പിളിന്റെ": "apples",
+        "പാൽ": "milk", "പാല്": "milk", "പാലിന്റെ": "milk", "പാലിന്": "milk", "paal": "milk",
+        "ആപ്പിൾ": "apples", "ആപ്പിള്": "apples", "ആപ്പിളുകൾ": "apples", "ആപ്പിളിന്റെ": "apples",
         "ഏത്തപ്പഴം": "bananas", "വാഴപ്പഴം": "bananas", "പഴം": "bananas",
-        "തൈര്": "yogurt", "അരി": "rice", "ബ്രെഡ്": "bread", "റൊട്ടി": "bread",
+        "തൈര്": "curd", "അരി": "rice", "ബ്രെഡ്": "bread", "റൊട്ടി": "bread",
         "ചിപ്സ്": "chips", "ടൂത്ത് പേസ്റ്റ്": "toothpaste", "ടൂത്ത്പേസ്റ്റ്": "toothpaste",
         "സോപ്പ്": "soap", "വെള്ളം": "water", "ജ്യൂസ്": "juice", "ചീസ്": "cheese",
         "വെണ്ണ": "butter", "മുട്ട": "eggs", "മുട്ടകൾ": "eggs", "തക്കാളി": "tomatoes",
-        "ഉള്ളി": "onions", "ഉരുളക്കിഴങ്ങ്": "potatoes"
+        "ഉള്ളി": "onions", "ഉരുളക്കിഴങ്ങ്": "potatoes", "പഞ്ചസാര": "sugar",
+        "ഉപ്പ്": "salt", "എണ്ണ": "cooking oil"
     }
 )
 
@@ -184,3 +186,9 @@ def apply_corrections(text: str) -> str:
             return second_part
 
     return s
+
+
+SUPPORTED_LANGUAGES = {
+    "en": "English",
+    "ml": "Malayalam"
+}

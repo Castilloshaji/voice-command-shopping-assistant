@@ -6,7 +6,6 @@ export interface LanguageOption {
 
 export const SUPPORTED_LANGUAGES: LanguageOption[] = [
   { code: 'en-US', label: 'English (US)', nativeName: 'English' },
-  { code: 'hi-IN', label: 'Hindi', nativeName: 'हिन्दी' },
   { code: 'ml-IN', label: 'Malayalam', nativeName: 'മലയാളം' },
 ];
 

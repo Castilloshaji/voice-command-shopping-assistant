@@ -137,7 +137,7 @@ MALAYALAM_ITEM_MAP = {
     "ഏത്തപ്പഴം": "bananas",
     "വാഴപ്പഴം": "bananas",
     "പഴം": "bananas",
-    "തൈര്": "yogurt",
+    "തൈര്": "curd",
     "അരി": "rice",
     "ബ്രെഡ്": "bread",
     "റൊട്ടി": "bread",
