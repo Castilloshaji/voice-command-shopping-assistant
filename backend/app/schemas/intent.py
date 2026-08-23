@@ -15,6 +15,7 @@ class IntentEnum(str, Enum):
 class VoiceParseRequest(BaseModel):
     text: str = Field(..., description="Canonical natural language command text")
     language: Optional[str] = Field(default="en-US", description="Language code")
+    session_id: Optional[str] = Field(default=None, description="Optional session identifier for conversation context")
 
     @field_validator("text")
     @classmethod
