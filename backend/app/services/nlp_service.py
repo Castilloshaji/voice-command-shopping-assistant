@@ -1,4 +1,5 @@
 import re
+import unicodedata
 from typing import Optional, Tuple, Dict, Any, List
 from app.schemas.intent import ParsedIntent, IntentEnum
 
@@ -70,19 +71,131 @@ KNOWN_BRANDS = [
     "nature's own", "organic girl", "coke", "cocacola", "pepsi"
 ]
 
+MALAYALAM_NUMBER_WORDS = {
+    "ഒന്ന്": 1.0,
+    "ഒരു": 1.0,
+    "ഒരേ": 1.0,
+    "രണ്ട്": 2.0,
+    "രണ്ടു": 2.0,
+    "മൂന്ന്": 3.0,
+    "മൂന്നു": 3.0,
+    "നാല്": 4.0,
+    "നാലു": 4.0,
+    "അഞ്ച്": 5.0,
+    "അഞ്ചു": 5.0,
+    "ആറ്": 6.0,
+    "ആറു": 6.0,
+    "ഏഴ്": 7.0,
+    "ഏഴു": 7.0,
+    "എട്ട്": 8.0,
+    "എട്ടു": 8.0,
+    "ഒമ്പത്": 9.0,
+    "ഒൻപത്": 9.0,
+    "പത്ത്": 10.0,
+    "പത്തു": 10.0,
+    "പതിനൊന്ന്": 11.0,
+    "പന്ത്രണ്ട്": 12.0,
+    "അര": 0.5,
+    "അര ഡസൻ": 6.0,
+    "ഒരു ഡസൻ": 12.0,
+}
+
+MALAYALAM_UNITS_MAP = {
+    "കുപ്പി": "bottles",
+    "കുപ്പികൾ": "bottles",
+    "പാക്കറ്റ്": "packets",
+    "പാക്കറ്റുകൾ": "packets",
+    "പാക്ക്": "pack",
+    "കിലോ": "kg",
+    "കിലോഗ്രാം": "kg",
+    "ഗ്രാം": "g",
+    "ഗ്രാമുകൾ": "g",
+    "ലിറ്റർ": "liters",
+    "ലിറ്റര്": "liters",
+    "ലിറ്ററുകൾ": "liters",
+    "കാർട്ടൺ": "cartons",
+    "കാൻ": "cans",
+    "ബാഗ്": "bags",
+    "ബോക്സ്": "boxes",
+    "ജാർ": "jars",
+    "റോൾ": "rolls",
+}
+
+MALAYALAM_ITEM_MAP = {
+    "പാൽ": "milk",
+    "പാലിന്റെ": "milk",
+    "പാലിന്": "milk",
+    "ആപ്പിൾ": "apples",
+    "ആപ്പിളുകൾ": "apples",
+    "ആപ്പിളിന്റെ": "apples",
+    "ഏത്തപ്പഴം": "bananas",
+    "വാഴപ്പഴം": "bananas",
+    "പഴം": "bananas",
+    "തൈര്": "yogurt",
+    "അരി": "rice",
+    "ബ്രെഡ്": "bread",
+    "റൊട്ടി": "bread",
+    "ചിപ്സ്": "chips",
+    "ടൂത്ത് പേസ്റ്റ്": "toothpaste",
+    "ടൂത്ത്പേസ്റ്റ്": "toothpaste",
+    "സോപ്പ്": "soap",
+    "വെള്ളം": "water",
+    "ജ്യൂസ്": "juice",
+    "ചീസ്": "cheese",
+    "വെണ്ണ": "butter",
+    "മുട്ട": "eggs",
+    "മുട്ടകൾ": "eggs",
+    "തക്കാളി": "tomatoes",
+    "ഉള്ളി": "onions",
+    "ഉരുളക്കിഴങ്ങ്": "potatoes",
+    "പഞ്ചസാര": "sugar",
+    "ചായ": "tea",
+    "കാപ്പി": "coffee",
+}
+
+MALAYALAM_DIGITS = {
+    '൦': '0', '<ctrl42>': '1', '൨': '2', '൩': '3', '൪': '4',
+    '൫': '5', '൬': '6', '൭': '7', '൮': '8', '൯': '9'
+}
+
+
+def contains_malayalam(text: str) -> bool:
+    """Check if string contains Malayalam Unicode characters (U+0D00 - U+0D7F)."""
+    return any('\u0d00' <= char <= '\u0d7f' for char in text)
+
+
+def parse_malayalam_number(val_str: str) -> Optional[float]:
+    """Parse digit string or Malayalam number word into float."""
+    if not val_str:
+        return None
+    s = val_str.strip()
+    for ml_d, ascii_d in MALAYALAM_DIGITS.items():
+        s = s.replace(ml_d, ascii_d)
+    if s in MALAYALAM_NUMBER_WORDS:
+        return MALAYALAM_NUMBER_WORDS[s]
+    try:
+        return float(s)
+    except ValueError:
+        return None
+
+
 class NLPService:
     @staticmethod
     def normalize_text(text: str) -> str:
         """
         Normalizes natural language input:
+        - Unicode NFC normalization
         - Strip leading/trailing whitespace
-        - Convert to lower-case
+        - Convert to lower-case for non-Malayalam text
         - Collapse multiple spaces
         - Remove trailing punctuation (!, ?, .) while preserving $ and decimals
         """
         if not text:
             return ""
-        s = text.strip().lower()
+        s = unicodedata.normalize("NFC", text)
+        s = s.strip()
+        if not contains_malayalam(s):
+            s = s.lower()
         s = re.sub(r'\s+', ' ', s)
         s = re.sub(r'[!?.,]+$', '', s)
         s = s.strip()
@@ -152,6 +265,156 @@ class NLPService:
         return 1.0, None, s
 
     @staticmethod
+    def parse_malayalam_transcript(raw_text: str, norm: str) -> ParsedIntent:
+        """
+        Deterministic parser pipeline for Malayalam voice commands.
+        """
+        # 1. CLEAR_LIST (Explicit strict matching)
+        clear_patterns = [
+            r'^(?:ലിസ്റ്റ്\s+)?ക്ലിയർ\s+ചെയ്യൂ$',
+            r'^എല്ലാം\s+നീക്കം\s+ചെയ്യൂ$',
+            r'^(?:ലിസ്റ്റ്\s+)?മൊത്തം\s+കളയൂ$',
+            r'^എല്ലാ\s+ഉൽപ്പന്നങ്ങളും\s+നീക്കം\s+ചെയ്യൂ$',
+            r'^ലിസ്റ്റ്\s+ക്ലിയർ\s+ചെയ്യുക$'
+        ]
+        for pat in clear_patterns:
+            if re.search(pat, norm):
+                return ParsedIntent(
+                    intent=IntentEnum.CLEAR_LIST,
+                    confidence=1.0,
+                    original_text=raw_text,
+                    normalized_text=norm
+                )
+
+        # 2. SHOW_LIST
+        show_patterns = [
+            r'^(?:എന്റെ\s+)?(?:ഷോപ്പിംഗ്\s+)?ലിസ്റ്റ്\s+കാണിക്കൂ$',
+            r'^ലിസ്റ്റിൽ\s+എന്തൊക്കെയുണ്ട്$',
+            r'^(?:എന്റെ\s+)?ലിസ്റ്റ്\s+വായിക്കൂ$',
+            r'^ഷോപ്പിംഗ്\s+ലിസ്റ്റ്\s+കാണിക്കൂ$'
+        ]
+        for pat in show_patterns:
+            if re.search(pat, norm):
+                return ParsedIntent(
+                    intent=IntentEnum.SHOW_LIST,
+                    confidence=1.0,
+                    original_text=raw_text,
+                    normalized_text=norm
+                )
+
+        # 3. GET_SUGGESTIONS
+        suggestion_patterns = [
+            r'^എന്തൊക്കെ\s+വാങ്ങണം\??$',
+            r'^(?:എനിക്ക്\s+)?നിർദ്ദേശങ്ങൾ\s+നൽകൂ$',
+            r'^ഞാൻ\s+എന്താണ്\s+വാങ്ങേണ്ടത്$'
+        ]
+        for pat in suggestion_patterns:
+            if re.search(pat, norm):
+                return ParsedIntent(
+                    intent=IntentEnum.GET_SUGGESTIONS,
+                    confidence=1.0,
+                    original_text=raw_text,
+                    normalized_text=norm
+                )
+
+        # 4. UPDATE_QUANTITY
+        update_match = re.match(
+            r'^(?P<item>.+?)(?:\s+(?:ന്റെ|ഇന്റെ|അളവ്|എണ്ണം))*\s+(?P<qty>\d+|[^\s]+)\s+(?:ആക്കൂ|ആക്കുക|മാറ്റൂ|ആക്ക്)$',
+            norm
+        )
+        if update_match:
+            item_raw = update_match.group("item").strip()
+            item_raw = re.sub(r'\s+(?:ന്റെ|ഇന്റെ|അളവ്|എണ്ണം)$', '', item_raw).strip()
+            qty_raw = update_match.group("qty").strip()
+            qty_val = parse_malayalam_number(qty_raw)
+            if qty_val is not None:
+                clean_item = MALAYALAM_ITEM_MAP.get(item_raw, item_raw)
+                return ParsedIntent(
+                    intent=IntentEnum.UPDATE_QUANTITY,
+                    item=clean_item,
+                    quantity=qty_val,
+                    confidence=1.0,
+                    original_text=raw_text,
+                    normalized_text=norm
+                )
+
+        # 5. REMOVE_ITEM
+        remove_match = re.match(
+            r'^(?:ലിസ്റ്റിൽ\s+നിന്ന്\s+)?(?P<item>.+?)\s+(?:നീക്കം\s+ചെയ്യൂ|നീക്കം\s+ചെയ്യുക|കളയൂ|ഒഴിവാക്കൂ|എടുത്തു\s+മാറ്റൂ)$',
+            norm
+        )
+        if remove_match:
+            item_raw = remove_match.group("item").strip()
+            clean_item = MALAYALAM_ITEM_MAP.get(item_raw, item_raw)
+            return ParsedIntent(
+                intent=IntentEnum.REMOVE_ITEM,
+                item=clean_item,
+                confidence=1.0,
+                original_text=raw_text,
+                normalized_text=norm
+            )
+
+        # 6. ADD_ITEM
+        work_text = norm
+        work_text = re.sub(r'^(?:എന്റെ\s+)?(?:ലിസ്റ്റിലേക്ക്|ഷോപ്പിംഗ്\s+ലിസ്റ്റിലേക്ക്|എനിക്ക്|ദയവായി)\s+', '', work_text).strip()
+
+        add_verbs = [
+            "ചേർക്കൂ", "ചേർക്കുക", "വാങ്ങണം", "വാങ്ങൂ", "വേണം", "ഉൾപ്പെടുത്തൂ"
+        ]
+        has_add_verb = False
+        for v in add_verbs:
+            if work_text.endswith(" " + v) or work_text == v:
+                work_text = re.sub(rf'\s+{re.escape(v)}$', '', work_text).strip()
+                has_add_verb = True
+                break
+
+        qty_val: Optional[float] = None
+        unit_val: Optional[str] = None
+        rem_text = work_text
+
+        for num_phrase, num_num in sorted(MALAYALAM_NUMBER_WORDS.items(), key=lambda x: len(x[0]), reverse=True):
+            if rem_text.startswith(num_phrase + " "):
+                qty_val = num_num
+                rem_text = rem_text[len(num_phrase):].strip()
+                break
+
+        tokens = rem_text.split()
+        if tokens:
+            if qty_val is None:
+                parsed_q = parse_malayalam_number(tokens[0])
+                if parsed_q is not None:
+                    qty_val = parsed_q
+                    tokens = tokens[1:]
+
+            if tokens and tokens[0] in MALAYALAM_UNITS_MAP:
+                unit_val = MALAYALAM_UNITS_MAP[tokens[0]]
+                tokens = tokens[1:]
+
+            item_str = " ".join(tokens).strip()
+            clean_item = MALAYALAM_ITEM_MAP.get(item_str, item_str)
+
+            if clean_item in MALAYALAM_ITEM_MAP.values() or item_str in MALAYALAM_ITEM_MAP or has_add_verb or qty_val is not None:
+                if item_str or clean_item:
+                    return ParsedIntent(
+                        intent=IntentEnum.ADD_ITEM,
+                        item=clean_item if clean_item else item_str,
+                        quantity=qty_val if qty_val is not None else 1.0,
+                        unit=unit_val,
+                        confidence=1.0,
+                        original_text=raw_text,
+                        normalized_text=norm
+                    )
+
+        # Fallback to UNKNOWN
+        return ParsedIntent(
+            intent=IntentEnum.UNKNOWN,
+            confidence=0.0,
+            original_text=raw_text,
+            normalized_text=norm,
+            message="Command not recognized"
+        )
+
+    @staticmethod
     def parse_transcript(transcript: str, language: str = "en-US") -> ParsedIntent:
         """
         Main deterministic parser pipeline:
@@ -168,6 +431,9 @@ class NLPService:
                 normalized_text="",
                 message="Empty input command"
             )
+
+        if contains_malayalam(norm) or contains_malayalam(raw_text):
+            return NLPService.parse_malayalam_transcript(raw_text, norm)
 
         # 1. CLEAR_LIST (Explicit match)
         clear_patterns = [
