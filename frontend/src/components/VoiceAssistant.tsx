@@ -81,6 +81,7 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onCommandExecute
     setVoiceState('IDLE');
   };
 
+  const selectedLangObj = SUPPORTED_LANGUAGES.find((l) => l.code === selectedLanguage);
   const currentError = speechError || apiError;
   const activeState = currentError
     ? 'ERROR'
@@ -158,7 +159,11 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onCommandExecute
         {/* Status Label with Live Region */}
         <div className="status-label" aria-live="polite">
           {activeState === 'IDLE' && <p>Tap to speak</p>}
-          {activeState === 'LISTENING' && <p className="status-listening">Listening…</p>}
+          {activeState === 'LISTENING' && (
+            <p className="status-listening">
+              Listening in {selectedLangObj?.label || 'English (US)'}…
+            </p>
+          )}
           {activeState === 'PROCESSING' && <p className="status-processing">Understanding command...</p>}
           {activeState === 'EXECUTING' && <p className="status-processing">Executing command...</p>}
           {activeState === 'RESULT' && <p className="status-result">Command Executed Successfully</p>}
