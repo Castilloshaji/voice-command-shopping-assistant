@@ -69,7 +69,7 @@ def execute_voice_command(
         )
         return res
 
-    execution_res = CommandService.execute_command(db, parsed)
+    execution_res = CommandService.execute_command(db, parsed, session_id=request.session_id)
 
     # Optionally polish natural assistant response via LLM if enabled
     if settings.ENABLE_AI_RESPONSES and execution_res.message:

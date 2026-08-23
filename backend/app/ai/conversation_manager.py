@@ -14,6 +14,7 @@ class ConversationSession(BaseModel):
     session_id: str
     turns: List[TurnContext] = Field(default_factory=list)
     pending_clarification: Optional[Dict[str, Any]] = None
+    pending_checkout: Optional[Dict[str, Any]] = None
 
     def add_turn(self, turn: TurnContext):
         self.turns.append(turn)

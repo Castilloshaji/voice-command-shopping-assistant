@@ -10,6 +10,9 @@ Valid intent values:
 - "SHOW_LIST" (e.g., "show my list", "what is on my list", "view shopping list")
 - "CLEAR_LIST" (e.g., "clear my list", "remove everything from list", "delete all items")
 - "GET_SUGGESTIONS" (e.g., "what should I buy", "give me suggestions", "what do I usually buy")
+- "CHECKOUT" (e.g., "checkout", "place my order", "how much is my cart", "what's my total", "checkout ചെയ്യൂ")
+- "CONFIRM_ORDER" (e.g., "yes", "confirm", "place it", "അതെ", "ശരി")
+- "CANCEL_ORDER" (e.g., "no", "cancel", "don't checkout", "do not place my order", "വേണ്ട")
 - "UNKNOWN" (e.g., unrecognized speech, gibberish)
 
 CRITICAL RULES:
@@ -18,7 +21,7 @@ CRITICAL RULES:
 3. CONTEXTUAL FOLLOW-UPS: If context provides previous candidates or items, use context to resolve references like "make that 2 bottles" or "the green ones".
 4. OUTPUT FORMAT: Respond ONLY with a valid JSON object matching this schema:
 {
-  "intent": "ADD_ITEM" | "REMOVE_ITEM" | "UPDATE_QUANTITY" | "SEARCH_PRODUCT" | "SHOW_LIST" | "CLEAR_LIST" | "GET_SUGGESTIONS" | "UNKNOWN",
+  "intent": "ADD_ITEM" | "REMOVE_ITEM" | "UPDATE_QUANTITY" | "SEARCH_PRODUCT" | "SHOW_LIST" | "CLEAR_LIST" | "GET_SUGGESTIONS" | "CHECKOUT" | "CONFIRM_ORDER" | "CANCEL_ORDER" | "UNKNOWN",
   "items": [
     {
       "item": "milk",

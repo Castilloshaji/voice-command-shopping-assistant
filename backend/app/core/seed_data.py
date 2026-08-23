@@ -2475,9 +2475,26 @@ SEED_PRODUCTS: List[Dict[str, Any]] = [
 ]
 
 def seed_products(db: Session) -> None:
-    """Seed default product catalog if table is empty."""
-    existing_count = db.query(Product).count()
-    if existing_count == 0:
-        products = [Product(**data) for data in SEED_PRODUCTS]
-        db.add_all(products)
-        db.commit()
+    """
+    Seeds/syncs default product catalog into database.
+    Inserts any missing catalog items from SEED_PRODUCTS without deleting existing items or mutating existing IDs.
+    """
+    existing_products = {p.name.strip().lower(): p for p in db.query(Product).all()}
+    new_products = []
+    for data in SEED_PRODUCTS:
+        p_name_lower = data["name"].strip().lower()
+        if p_name_lower not in existing_products:
+            new_products.append(Product(**data))
+        else:
+            existing = existing_products[p_name_lower]
+            existing.category = data.get("category", existing.category)
+            existing.brand = data.get("brand", existing.brand)
+            existing.price = data.get("price", existing.price)
+            existing.size = data.get("size", existing.size)
+            existing.is_available = data.get("is_available", existing.is_available)
+            existing.season = data.get("season", existing.season)
+            existing.substitutes = data.get("substitutes", existing.substitutes)
+
+    if new_products:
+        db.add_all(new_products)
+    db.commit()

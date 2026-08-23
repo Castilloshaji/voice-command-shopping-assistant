@@ -6,6 +6,9 @@ export type IntentType =
   | 'SHOW_LIST'
   | 'CLEAR_LIST'
   | 'GET_SUGGESTIONS'
+  | 'CHECKOUT'
+  | 'CONFIRM_ORDER'
+  | 'CANCEL_ORDER'
   | 'UNKNOWN';
 
 export interface VoiceParseRequest {

@@ -154,4 +154,43 @@ export const apiService = {
 
     return response.json();
   },
+
+  async getCheckoutPreview(): Promise<import('../types/checkout').CheckoutPreview> {
+    const response = await fetch(`${API_BASE_URL}/checkout/preview`);
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.detail || `Failed to fetch checkout preview (${response.status})`);
+    }
+    return response.json();
+  },
+
+  async placeOrder(): Promise<import('../types/checkout').Order> {
+    const response = await fetch(`${API_BASE_URL}/checkout`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+    });
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.detail || `Failed to place order (${response.status})`);
+    }
+    return response.json();
+  },
+
+  async getOrders(): Promise<import('../types/checkout').Order[]> {
+    const response = await fetch(`${API_BASE_URL}/orders`);
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.detail || `Failed to fetch orders (${response.status})`);
+    }
+    return response.json();
+  },
+
+  async getOrderById(orderId: number): Promise<import('../types/checkout').Order> {
+    const response = await fetch(`${API_BASE_URL}/orders/${orderId}`);
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.detail || `Failed to fetch order details (${response.status})`);
+    }
+    return response.json();
+  },
 };

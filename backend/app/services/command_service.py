@@ -1,18 +1,29 @@
 from typing import Optional, List
 from sqlalchemy.orm import Session
 from sqlalchemy import func
+from fastapi import HTTPException
 from app.models.shopping_list import ListItem
 from app.schemas.intent import ParsedIntent, IntentEnum, IntentItem
 from app.schemas.command import CommandExecutionResponse
 from app.schemas.shopping_list import ListItemCreate, ListItemUpdate, ListItemResponse
 from app.schemas.product import ProductResponse
+from app.schemas.checkout import OrderResponse
 from app.services.shopping_list_service import ShoppingListService
 from app.services.product_service import ProductService
 from app.services.recommendation_service import RecommendationService
+from app.services.checkout_service import CheckoutService
+from app.ai.conversation_manager import conversation_manager
 
 class CommandService:
     @staticmethod
-    def execute_command(db: Session, parsed: ParsedIntent) -> CommandExecutionResponse:
+    def invalidate_pending_checkout(session_id: Optional[str]):
+        if session_id:
+            session = conversation_manager.get_or_create_session(session_id)
+            if session:
+                session.pending_checkout = None
+
+    @staticmethod
+    def execute_command(db: Session, parsed: ParsedIntent, session_id: Optional[str] = None) -> CommandExecutionResponse:
         """
         Orchestrates intent execution by dispatching ParsedIntent to the appropriate domain service.
         """
@@ -20,6 +31,7 @@ class CommandService:
 
         # 1. ADD_ITEM
         if intent == IntentEnum.ADD_ITEM:
+            CommandService.invalidate_pending_checkout(session_id)
             target_items: List[IntentItem] = []
             if parsed.items:
                 target_items = parsed.items
@@ -170,6 +182,7 @@ class CommandService:
 
         # 2. REMOVE_ITEM
         if intent == IntentEnum.REMOVE_ITEM:
+            CommandService.invalidate_pending_checkout(session_id)
             if not parsed.item:
                 return CommandExecutionResponse(
                     success=False,
@@ -210,6 +223,7 @@ class CommandService:
 
         # 3. UPDATE_QUANTITY
         if intent == IntentEnum.UPDATE_QUANTITY:
+            CommandService.invalidate_pending_checkout(session_id)
             if not parsed.item or parsed.quantity is None:
                 return CommandExecutionResponse(
                     success=False,
@@ -259,12 +273,110 @@ class CommandService:
 
         # 5. CLEAR_LIST
         if intent == IntentEnum.CLEAR_LIST:
+            CommandService.invalidate_pending_checkout(session_id)
             count = ShoppingListService.clear_list(db)
             return CommandExecutionResponse(
                 success=True,
                 intent=intent,
                 message=f"Cleared all {count} items from your shopping list.",
                 data={"deleted_count": count}
+            )
+
+        # 6. CHECKOUT
+        if intent == IntentEnum.CHECKOUT:
+            preview = CheckoutService.preview_checkout(db)
+            if preview.item_count == 0:
+                return CommandExecutionResponse(
+                    success=False,
+                    intent=intent,
+                    message="Your shopping list is empty. Add items before checking out.",
+                    data=preview.model_dump(mode="json")
+                )
+
+            if preview.has_unavailable:
+                unavail_names = [i.name for i in preview.items if not i.is_available]
+                msg = f"Cannot checkout: '{', '.join(unavail_names)}' is unavailable. Replace or remove it first."
+                return CommandExecutionResponse(
+                    success=False,
+                    intent=intent,
+                    message=msg,
+                    data=preview.model_dump(mode="json")
+                )
+
+            cart_hash = CheckoutService.get_cart_hash(db)
+            if session_id:
+                session = conversation_manager.get_or_create_session(session_id)
+                if session:
+                    session.pending_checkout = {
+                        "cart_hash": cart_hash,
+                        "total": preview.total,
+                        "item_count": preview.item_count
+                    }
+
+            total_fmt = f"₹{int(preview.total)}" if preview.total.is_integer() else f"₹{preview.total:.2f}"
+            msg = f"Your total is {total_fmt} for {preview.item_count} items. Would you like me to place the order?"
+            return CommandExecutionResponse(
+                success=True,
+                intent=intent,
+                message=msg,
+                data=preview.model_dump(mode="json")
+            )
+
+        # 7. CONFIRM_ORDER
+        if intent == IntentEnum.CONFIRM_ORDER:
+            cart_hash = CheckoutService.get_cart_hash(db)
+            session = conversation_manager.get_or_create_session(session_id) if session_id else None
+
+            if not session or not session.pending_checkout:
+                return CommandExecutionResponse(
+                    success=False,
+                    intent=intent,
+                    message="There is no pending order to confirm. Please say 'checkout' to review your cart total.",
+                    data=None
+                )
+
+            pending = session.pending_checkout
+            if pending.get("cart_hash") != cart_hash:
+                session.pending_checkout = None
+                return CommandExecutionResponse(
+                    success=False,
+                    intent=intent,
+                    message="Your shopping list has changed. Please say 'checkout' again to review your updated total.",
+                    data=None
+                )
+
+            try:
+                order = CheckoutService.place_order(db)
+                session.pending_checkout = None
+                order_resp = OrderResponse.model_validate(order).model_dump(mode="json")
+                total_fmt = f"₹{int(order.total)}" if order.total.is_integer() else f"₹{order.total:.2f}"
+                msg = f"Order #{order.order_number} placed successfully! Total: {total_fmt}."
+                return CommandExecutionResponse(
+                    success=True,
+                    intent=intent,
+                    message=msg,
+                    data=order_resp
+                )
+            except HTTPException as exc:
+                session.pending_checkout = None
+                return CommandExecutionResponse(
+                    success=False,
+                    intent=intent,
+                    message=exc.detail,
+                    data=None
+                )
+
+        # 8. CANCEL_ORDER
+        if intent == IntentEnum.CANCEL_ORDER:
+            if session_id:
+                session = conversation_manager.get_or_create_session(session_id)
+                if session:
+                    session.pending_checkout = None
+            return CommandExecutionResponse(
+                success=True,
+                intent=intent,
+                message="Order placement cancelled.",
+                data=None
             )
 
         # 6. SEARCH_PRODUCT

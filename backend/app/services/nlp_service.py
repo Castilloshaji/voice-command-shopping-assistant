@@ -446,6 +446,48 @@ class NLPService:
         """
         Deterministic parser pipeline for Malayalam voice commands.
         """
+        # 0. CHECKOUT / CONFIRM / CANCEL
+        ml_checkout_patterns = [
+            r'checkout\s*(?:ചെയ്യൂ|ചെയ്യുക|ആക്കൂ)?',
+            r'order\s*place\s*(?:ചെയ്യൂ|ചെയ്യുക)?',
+            r'cart\s*(?:കാണിക്കൂ|കാണിക്കുക|മൊത്തം|total)',
+            r'മൊത്തം\s+എത്രയാണ്',
+            r'എത്രയാ(?:ണ്|കും)',
+            r'ചെക്ക്\s*ഔട്ട്'
+        ]
+        for pat in ml_checkout_patterns:
+            if re.search(pat, norm, flags=re.IGNORECASE):
+                return ParsedIntent(
+                    intent=IntentEnum.CHECKOUT,
+                    confidence=1.0,
+                    original_text=raw_text,
+                    normalized_text=norm
+                )
+
+        ml_confirm_patterns = [
+            r'^(?:ആതെ|അതെ|ശരി|തീർച്ചയായും|ഉവ്വ്|confirm\s*ചെയ്യൂ)$'
+        ]
+        for pat in ml_confirm_patterns:
+            if re.search(pat, norm, flags=re.IGNORECASE):
+                return ParsedIntent(
+                    intent=IntentEnum.CONFIRM_ORDER,
+                    confidence=1.0,
+                    original_text=raw_text,
+                    normalized_text=norm
+                )
+
+        ml_cancel_patterns = [
+            r'^(?:വേണ്ട|ഇല്ല|cancel\s*ചെയ്യൂ|വേണ്ടതില്ല|നിർത്തൂ)$'
+        ]
+        for pat in ml_cancel_patterns:
+            if re.search(pat, norm, flags=re.IGNORECASE):
+                return ParsedIntent(
+                    intent=IntentEnum.CANCEL_ORDER,
+                    confidence=1.0,
+                    original_text=raw_text,
+                    normalized_text=norm
+                )
+
         # 1. CLEAR_LIST (Explicit strict matching)
         clear_patterns = [
             r'^(?:ലിസ്റ്റ്\s+)?ക്ലിയർ\s+ചെയ്യൂ$',
@@ -588,6 +630,53 @@ class NLPService:
 
         if contains_malayalam(norm) or contains_malayalam(raw_text):
             return NLPService.parse_malayalam_transcript(raw_text, norm)
+
+        # 0. CHECKOUT / CANCEL / CONFIRM
+        checkout_patterns = [
+            r'^(?:i\s+want\s+to\s+)?check\s*out$',
+            r'^(?:please\s+)?place\s+(?:my\s+)?order$',
+            r'^buy\s+everything(?:\s+on\s+my\s+list)?$',
+            r'^(?:how\s+much\s+is|what\s*\'?s)\s+(?:my\s+)?cart(?:\s+total)?$',
+            r'^(?:how\s+much\s+is|what\s*\'?s)\s+my\s+total$',
+            r'^what\s+is\s+(?:the\s+|my\s+)?total\??$',
+            r'^how\s+much\s+will\s+everything\s+cost\??$',
+            r'^(?:show\s+me\s+)?checkout$',
+            r'checkout\s*(?:ചെയ്യൂ|ചെയ്യുക|ആക്കൂ)?',
+            r'order\s*place\s*(?:ചെയ്യൂ|ചെയ്യുക)?',
+            r'cart\s*(?:total\s*)?എത്രയാണ്'
+        ]
+        for pat in checkout_patterns:
+            if re.search(pat, norm, flags=re.IGNORECASE):
+                return ParsedIntent(
+                    intent=IntentEnum.CHECKOUT,
+                    confidence=1.0,
+                    original_text=raw_text,
+                    normalized_text=norm
+                )
+
+        cancel_patterns = [
+            r'^(?:no|cancel|stop|don\'t\s+checkout|do\s+not\s+checkout|do\s+not\s+place\s+my\s+order|don\'t\s+place\s+my\s+order|i\s+don\'t\s+want\s+to\s+buy\s+these)$'
+        ]
+        for pat in cancel_patterns:
+            if re.search(pat, norm, flags=re.IGNORECASE):
+                return ParsedIntent(
+                    intent=IntentEnum.CANCEL_ORDER,
+                    confidence=1.0,
+                    original_text=raw_text,
+                    normalized_text=norm
+                )
+
+        confirm_patterns = [
+            r'^(?:yes|confirm|place\s+it|yeah|sure|ok|okay)$'
+        ]
+        for pat in confirm_patterns:
+            if re.search(pat, norm, flags=re.IGNORECASE):
+                return ParsedIntent(
+                    intent=IntentEnum.CONFIRM_ORDER,
+                    confidence=1.0,
+                    original_text=raw_text,
+                    normalized_text=norm
+                )
 
         # 1. CLEAR_LIST (Explicit match)
         clear_patterns = [

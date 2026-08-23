@@ -10,6 +10,9 @@ class IntentEnum(str, Enum):
     SHOW_LIST = "SHOW_LIST"
     CLEAR_LIST = "CLEAR_LIST"
     GET_SUGGESTIONS = "GET_SUGGESTIONS"
+    CHECKOUT = "CHECKOUT"
+    CONFIRM_ORDER = "CONFIRM_ORDER"
+    CANCEL_ORDER = "CANCEL_ORDER"
     UNKNOWN = "UNKNOWN"
 
 class VoiceParseRequest(BaseModel):

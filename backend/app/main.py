@@ -3,9 +3,9 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
 from app.core.database import engine, SessionLocal
-from app.models import Base
+from app.models import Base, Product, ListItem, ShoppingHistory, Order, OrderItem
 from app.core.seed_data import seed_products
-from app.api.v1 import health, items, voice, products, suggestions
+from app.api.v1 import health, items, voice, products, suggestions, checkout, orders
 
 # Create database tables
 Base.metadata.create_all(bind=engine)
@@ -44,6 +44,8 @@ app.include_router(items.router, prefix=settings.API_V1_STR)
 app.include_router(voice.router, prefix=settings.API_V1_STR)
 app.include_router(products.router, prefix=settings.API_V1_STR)
 app.include_router(suggestions.router, prefix=settings.API_V1_STR)
+app.include_router(checkout.router, prefix=settings.API_V1_STR)
+app.include_router(orders.router, prefix=settings.API_V1_STR)
 
 
 @app.get("/")

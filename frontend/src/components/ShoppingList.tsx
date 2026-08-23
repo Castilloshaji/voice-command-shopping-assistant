@@ -6,9 +6,10 @@ import { ConfirmModal } from './ConfirmModal';
 interface ShoppingListProps {
   onListChange?: () => void;
   refreshTrigger?: number;
+  onOpenCheckout?: () => void;
 }
 
-export const ShoppingList: React.FC<ShoppingListProps> = ({ onListChange, refreshTrigger }) => {
+export const ShoppingList: React.FC<ShoppingListProps> = ({ onListChange, refreshTrigger, onOpenCheckout }) => {
   const [items, setItems] = useState<ListItem[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
@@ -104,16 +105,31 @@ export const ShoppingList: React.FC<ShoppingListProps> = ({ onListChange, refres
             {activeItems.length} Active
           </span>
         </div>
-        {items.length > 0 && (
-          <button
-            type="button"
-            className="btn btn-sm btn-outline-danger"
-            onClick={() => setShowClearModal(true)}
-            aria-label="Clear shopping list"
-          >
-            Clear List
-          </button>
-        )}
+        <div className="header-actions" style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+          {onOpenCheckout && (
+            <button
+              type="button"
+              className="btn btn-primary checkout-trigger-btn"
+              onClick={onOpenCheckout}
+              disabled={activeItems.length === 0}
+              style={{ minHeight: '44px', fontWeight: 600 }}
+              aria-label="Checkout active shopping list items"
+            >
+              Checkout
+            </button>
+          )}
+          {items.length > 0 && (
+            <button
+              type="button"
+              className="btn btn-sm btn-outline-danger"
+              onClick={() => setShowClearModal(true)}
+              aria-label="Clear shopping list"
+              style={{ minHeight: '44px' }}
+            >
+              Clear List
+            </button>
+          )}
+        </div>
       </header>
 
       {error && (
