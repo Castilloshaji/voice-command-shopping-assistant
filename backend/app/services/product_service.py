@@ -131,3 +131,75 @@ class ProductService:
         result.sort(key=lambda p: p.name.strip().lower())
         return result
 
+    @staticmethod
+    def resolve_product(db: Session, item_name: str) -> dict:
+        """
+        Validates item_name against the Product catalog.
+        Returns:
+        {
+            "exact_match": Product | None,
+            "suggestions": List[Product]
+        }
+        """
+        import difflib
+
+        clean_name = item_name.strip().lower()
+        if not clean_name:
+            return {"exact_match": None, "suggestions": []}
+
+        all_products = db.query(Product).all()
+        if not all_products:
+            return {"exact_match": None, "suggestions": []}
+
+        # 1. Exact match (case & whitespace insensitive)
+        for prod in all_products:
+            if prod.name.strip().lower() == clean_name:
+                return {"exact_match": prod, "suggestions": []}
+
+        # 2. Strong catalog match:
+        # Check token / substring containment between item_name and catalog product names
+        norm_item = clean_name.replace("yoghurt", "yogurt")
+
+        strong_matches = []
+        for prod in all_products:
+            p_name_lower = prod.name.strip().lower()
+            if norm_item == p_name_lower:
+                return {"exact_match": prod, "suggestions": []}
+
+            tokens = [t for t in norm_item.split() if len(t) > 2]
+            p_tokens = p_name_lower.split()
+
+            # Direct containment or token match
+            if norm_item in p_name_lower or p_name_lower in norm_item:
+                strong_matches.append(prod)
+            elif tokens and any(t in p_tokens for t in tokens):
+                strong_matches.append(prod)
+
+        if strong_matches:
+            # Sort deterministically by shortest name length difference, name ascending, id
+            strong_matches.sort(key=lambda p: (abs(len(p.name) - len(item_name)), p.name.strip().lower(), p.id))
+            return {"exact_match": strong_matches[0], "suggestions": []}
+
+        # 3. No strong catalog match found (e.g. "minutes" or "unknownproduct")
+        # Candidate suggestions search using difflib.SequenceMatcher
+        scored_candidates = []
+        for prod in all_products:
+            ratio = difflib.SequenceMatcher(None, norm_item, prod.name.strip().lower()).ratio()
+            # Also evaluate ratio per token in product name
+            for p_word in prod.name.strip().lower().split():
+                w_ratio = difflib.SequenceMatcher(None, norm_item, p_word).ratio()
+                if w_ratio > ratio:
+                    ratio = w_ratio
+
+            # Only suggest products with reasonable similarity (threshold >= 0.5)
+            if ratio >= 0.5:
+                scored_candidates.append((ratio, prod))
+
+        scored_candidates.sort(key=lambda x: (-x[0], x[1].name.strip().lower(), x[1].id))
+        suggestions = [prod for _, prod in scored_candidates[:3]]
+
+        return {
+            "exact_match": None,
+            "suggestions": suggestions
+        }
+

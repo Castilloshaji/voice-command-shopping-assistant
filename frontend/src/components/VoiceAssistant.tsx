@@ -214,6 +214,23 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onCommandExecute
             <span className="result-icon" aria-hidden="true">{executionResult.success ? '✓' : '!'}</span>
             <span className="execution-message">{executionResult.message}</span>
           </div>
+          {!executionResult.success && executionResult.data?.suggestions && executionResult.data.suggestions.length > 0 && (
+            <div className="suggestion-actions" style={{ marginTop: '0.75rem' }}>
+              <p style={{ fontSize: '0.875rem', fontWeight: 500, marginBottom: '0.5rem' }}>Did you mean?</p>
+              <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                {executionResult.data.suggestions.map((sug: { product_id: number; name: string }) => (
+                  <button
+                    key={sug.product_id}
+                    type="button"
+                    className="btn btn-sm btn-outline"
+                    onClick={() => handleExecuteCommandText(`Add ${sug.name}`)}
+                  >
+                    Add {sug.name} instead
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>

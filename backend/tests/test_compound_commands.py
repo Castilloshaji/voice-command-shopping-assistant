@@ -166,16 +166,13 @@ def test_conversational_execution_and_database_verification():
     'add to milk then add to strawberries then add a packet of yoghurt'
     Verify database contains 3 clean items without filler words ('to milk then', etc.).
     """
-    # 1. Clear shopping list
     client.post("/api/v1/voice/execute", json={"text": "Delete all items"})
 
-    # 2. Execute conversational speech command
     text = "add to milk then add to strawberries then add a packet of yoghurt"
     exec_res = client.post("/api/v1/voice/execute", json={"text": text})
     assert exec_res.status_code == 200
     assert exec_res.json()["success"] is True
 
-    # 3. GET /api/v1/items and verify clean item names and properties
     items_res = client.get("/api/v1/items")
     assert items_res.status_code == 200
     items = items_res.json()
@@ -202,10 +199,7 @@ def test_conversational_duplicate_quantity_merging():
     """Verify duplicate quantity merging still works for conversational speech commands."""
     client.post("/api/v1/voice/execute", json={"text": "Delete all items"})
 
-    # First addition
     client.post("/api/v1/voice/execute", json={"text": "add 2 bottles of milk"})
-
-    # Second addition with conversational compound command
     client.post("/api/v1/voice/execute", json={"text": "add to milk and then add to bread"})
 
     items = client.get("/api/v1/items").json()
@@ -213,3 +207,81 @@ def test_conversational_duplicate_quantity_merging():
     items_map = {i["item_name"]: i for i in items}
     assert items_map["milk"]["quantity"] == 3.0
     assert items_map["bread"]["quantity"] == 1.0
+
+
+# =====================================================================
+# Catalog Validation Safety Layer Tests
+# =====================================================================
+
+def test_catalog_validation_add_2_minutes():
+    """
+    CRITICAL REGRESSION TEST:
+    Verify 'add 2 minutes' returns success=False, does NOT mutate DB,
+    and returns a clean non-addition message.
+    """
+    client.post("/api/v1/voice/execute", json={"text": "Delete all items"})
+    initial_items = client.get("/api/v1/items").json()
+    assert len(initial_items) == 0
+
+    exec_res = client.post("/api/v1/voice/execute", json={"text": "add 2 minutes"})
+    assert exec_res.status_code == 200
+    e_data = exec_res.json()
+
+    assert e_data["success"] is False
+    assert "I couldn't find 'minutes'" in e_data["message"]
+    assert "Nothing was added" in e_data["message"]
+    assert "data" in e_data and e_data["data"] is not None
+    assert "unrecognized_items" in e_data["data"]
+    assert e_data["data"]["unrecognized_items"] == ["minutes"]
+
+    # Verify ZERO database mutation
+    after_items = client.get("/api/v1/items").json()
+    assert len(after_items) == 0
+    item_names = [i["item_name"] for i in after_items]
+    assert "minutes" not in item_names
+
+
+def test_catalog_validation_compound_one_invalid():
+    """
+    Verify compound command 'add 2 bottles of milk and 3 minutes'
+    fails atomically: NOTHING is added to DB.
+    """
+    client.post("/api/v1/voice/execute", json={"text": "Delete all items"})
+
+    exec_res = client.post("/api/v1/voice/execute", json={"text": "add 2 bottles of milk and 3 minutes"})
+    assert exec_res.status_code == 200
+    e_data = exec_res.json()
+
+    assert e_data["success"] is False
+    assert "minutes" in e_data["data"]["unrecognized_items"]
+
+    # Atomic validation: NO item created in DB
+    items_after = client.get("/api/v1/items").json()
+    assert len(items_after) == 0
+
+
+def test_catalog_validation_compound_multiple_invalid():
+    """Verify 'add unknownproduct and anotherunknown' fails atomically."""
+    client.post("/api/v1/voice/execute", json={"text": "Delete all items"})
+
+    exec_res = client.post("/api/v1/voice/execute", json={"text": "add unknownproduct and anotherunknown"})
+    assert exec_res.status_code == 200
+    e_data = exec_res.json()
+
+    assert e_data["success"] is False
+    items_after = client.get("/api/v1/items").json()
+    assert len(items_after) == 0
+
+
+def test_catalog_validation_valid_compound_command():
+    """Verify 'add 2 bottles of milk and 3 apples' succeeds and adds both."""
+    client.post("/api/v1/voice/execute", json={"text": "Delete all items"})
+
+    exec_res = client.post("/api/v1/voice/execute", json={"text": "add 2 bottles of milk and 3 apples"})
+    assert exec_res.status_code == 200
+    assert exec_res.json()["success"] is True
+
+    items = client.get("/api/v1/items").json()
+    assert len(items) == 2
+    names = {i["item_name"] for i in items}
+    assert names == {"milk", "apples"}

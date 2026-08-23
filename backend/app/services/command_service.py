@@ -38,6 +38,42 @@ class CommandService:
                     data=None
                 )
 
+            # Validate ALL target_items against Product catalog before creating any items
+            unrecognized_items = []
+            all_suggestions = []
+
+            for item_info in target_items:
+                res = ProductService.resolve_product(db, item_info.item)
+                if res["exact_match"] is None:
+                    unrecognized_items.append(item_info.item)
+                    for s in res["suggestions"]:
+                        if s.id not in [s_item["product_id"] for s_item in all_suggestions]:
+                            all_suggestions.append({"product_id": s.id, "name": s.name})
+
+            # If ANY item is unrecognized: create NOTHING and return clarification error response
+            if unrecognized_items:
+                bad_item = unrecognized_items[0]
+                if all_suggestions:
+                    if len(all_suggestions) == 1:
+                        s_name = all_suggestions[0]["name"]
+                        msg = f"I couldn't find '{bad_item}' in our store catalog. Did you mean '{s_name}'? Nothing was added."
+                    else:
+                        s_names = [f"'{s['name']}'" for s in all_suggestions[:2]]
+                        joined_s = " or ".join(s_names)
+                        msg = f"I couldn't find '{bad_item}' in our store catalog. Did you mean {joined_s}? Nothing was added."
+                else:
+                    msg = f"I couldn't find '{bad_item}' in our store catalog. Nothing was added."
+
+                return CommandExecutionResponse(
+                    success=False,
+                    intent=intent,
+                    message=msg,
+                    data={
+                        "unrecognized_items": unrecognized_items,
+                        "suggestions": all_suggestions
+                    }
+                )
+
             # Single item execution - preserve exact messaging & data format for single item tests
             if len(target_items) == 1:
                 item_info = target_items[0]
