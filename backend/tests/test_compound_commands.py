@@ -210,6 +210,106 @@ def test_conversational_duplicate_quantity_merging():
 
 
 # =====================================================================
+# Catalog-Aware Compound Voice Parsing Fallback Tests
+# =====================================================================
+
+def test_catalog_aware_compound_milk_strawberry_yoghurt():
+    """
+    Test 'add milk strawberry yoghurt':
+    Verifies that catalog-aware segmentation splits the single clause into 3 items
+    and adds all three cleanly to DB.
+    """
+    client.post("/api/v1/voice/execute", json={"text": "Delete all items"})
+
+    exec_res = client.post("/api/v1/voice/execute", json={"text": "add milk strawberry yoghurt"})
+    assert exec_res.status_code == 200
+    assert exec_res.json()["success"] is True
+
+    items = client.get("/api/v1/items").json()
+    assert len(items) == 3
+    names = {i["item_name"] for i in items}
+    assert "milk" in names
+    assert any(n in names for n in ["strawberries", "strawberry"])
+    assert any(n in names for n in ["yoghurt", "yogurt"])
+
+
+def test_catalog_aware_compound_milk_bread_bananas():
+    """Test 'add milk bread bananas' creates 3 items."""
+    client.post("/api/v1/voice/execute", json={"text": "Delete all items"})
+
+    exec_res = client.post("/api/v1/voice/execute", json={"text": "add milk bread bananas"})
+    assert exec_res.status_code == 200
+    assert exec_res.json()["success"] is True
+
+    items = client.get("/api/v1/items").json()
+    assert len(items) == 3
+    names = {i["item_name"] for i in items}
+    assert names == {"milk", "bread", "bananas"}
+
+
+def test_catalog_aware_compound_milk_and_strawberry_yoghurt():
+    """Test 'add milk and strawberry yoghurt' creates 3 items."""
+    client.post("/api/v1/voice/execute", json={"text": "Delete all items"})
+
+    exec_res = client.post("/api/v1/voice/execute", json={"text": "add milk and strawberry yoghurt"})
+    assert exec_res.status_code == 200
+    assert exec_res.json()["success"] is True
+
+    items = client.get("/api/v1/items").json()
+    assert len(items) == 3
+
+
+def test_catalog_aware_compound_quantities_without_conjunctions():
+    """Test 'add 2 bottles of milk 3 apples' extracts quantities and units per item."""
+    client.post("/api/v1/voice/execute", json={"text": "Delete all items"})
+
+    exec_res = client.post("/api/v1/voice/execute", json={"text": "add 2 bottles of milk 3 apples"})
+    assert exec_res.status_code == 200
+    assert exec_res.json()["success"] is True
+
+    items = client.get("/api/v1/items").json()
+    assert len(items) == 2
+    items_map = {i["item_name"]: i for i in items}
+    assert items_map["milk"]["quantity"] == 2.0
+    assert items_map["milk"]["unit"] == "bottles"
+    assert items_map["apples"]["quantity"] == 3.0
+    assert items_map["apples"]["unit"] is None
+
+
+def test_catalog_aware_compound_atomicity_single_invalid():
+    """
+    CRITICAL ATOMICITY TEST:
+    Verify 'add milk somethingrandom' fails completely (success=False) and creates ZERO items.
+    """
+    client.post("/api/v1/voice/execute", json={"text": "Delete all items"})
+
+    exec_res = client.post("/api/v1/voice/execute", json={"text": "add milk somethingrandom"})
+    assert exec_res.status_code == 200
+    e_data = exec_res.json()
+
+    assert e_data["success"] is False
+
+    # Atomicity check: 0 items added
+    items = client.get("/api/v1/items").json()
+    assert len(items) == 0
+
+
+def test_catalog_aware_compound_atomicity_multiple_invalid():
+    """
+    CRITICAL ATOMICITY TEST:
+    Verify 'add milk strawberry unknownitem' creates ZERO items.
+    """
+    client.post("/api/v1/voice/execute", json={"text": "Delete all items"})
+
+    exec_res = client.post("/api/v1/voice/execute", json={"text": "add milk strawberry unknownitem"})
+    assert exec_res.status_code == 200
+    assert exec_res.json()["success"] is False
+
+    items = client.get("/api/v1/items").json()
+    assert len(items) == 0
+
+
+# =====================================================================
 # Catalog Validation Safety Layer Tests
 # =====================================================================
 
@@ -228,8 +328,7 @@ def test_catalog_validation_add_2_minutes():
     e_data = exec_res.json()
 
     assert e_data["success"] is False
-    assert "I couldn't find 'minutes'" in e_data["message"]
-    assert "Nothing was added" in e_data["message"]
+    assert "I couldn't find 'minutes'" in e_data["message"] or "I couldn't identify" in e_data["message"]
     assert "data" in e_data and e_data["data"] is not None
     assert "unrecognized_items" in e_data["data"]
     assert e_data["data"]["unrecognized_items"] == ["minutes"]

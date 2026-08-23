@@ -166,13 +166,8 @@ class ProductService:
             if norm_item == p_name_lower:
                 return {"exact_match": prod, "suggestions": []}
 
-            tokens = [t for t in norm_item.split() if len(t) > 2]
-            p_tokens = p_name_lower.split()
-
-            # Direct containment or token match
-            if norm_item in p_name_lower or p_name_lower in norm_item:
-                strong_matches.append(prod)
-            elif tokens and any(t in p_tokens for t in tokens):
+            # Direct containment: input item is substring of product name or product name equals input item
+            if norm_item in p_name_lower:
                 strong_matches.append(prod)
 
         if strong_matches:
@@ -202,4 +197,148 @@ class ProductService:
             "exact_match": None,
             "suggestions": suggestions
         }
+
+    @staticmethod
+    def resolve_compound_items(db: Session, text: str, initial_qty: Optional[float] = None, initial_unit: Optional[str] = None):
+        """
+        Attempts catalog-aware compound segmentation of a voice transcript clause into
+        a list of IntentItem objects if the ENTIRE clause can be covered by valid catalog products.
+        Returns None if any part of the clause contains unknown products.
+        """
+        from app.schemas.intent import IntentItem
+        from app.services.nlp_service import UNITS_MAP, NLPService
+
+        raw_text = text.strip().lower()
+        if not raw_text:
+            return None
+
+        all_products = db.query(Product).all()
+        if not all_products:
+            return None
+
+        # Build catalog product terms mapping
+        catalog_terms = {}
+        for p in all_products:
+            p_name = p.name.strip()
+            p_lower = p_name.lower()
+            catalog_terms[p_lower] = p_lower
+
+            words = p_lower.split()
+            if "milk" in words:
+                catalog_terms["milk"] = "milk"
+            if "apples" in words or "apple" in words:
+                catalog_terms["apples"] = "apples"
+                catalog_terms["apple"] = "apples"
+            if "bananas" in words or "banana" in words:
+                catalog_terms["bananas"] = "bananas"
+                catalog_terms["banana"] = "bananas"
+            if "strawberries" in words or "strawberry" in words:
+                catalog_terms["strawberries"] = "strawberries"
+                catalog_terms["strawberry"] = "strawberries"
+            if "bread" in words or "loaf" in words:
+                catalog_terms["bread"] = "bread"
+            if "cheese" in words:
+                catalog_terms["cheese"] = "cheese"
+            if "butter" in words:
+                catalog_terms["butter"] = "butter"
+            if "yogurt" in words or "yoghurt" in words:
+                catalog_terms["yogurt"] = "yogurt"
+                catalog_terms["yoghurt"] = "yoghurt"
+            if "juice" in words:
+                catalog_terms["juice"] = "juice"
+            if "water" in words:
+                catalog_terms["water"] = "water"
+            if "coffee" in words:
+                catalog_terms["coffee"] = "coffee"
+            if "chips" in words:
+                catalog_terms["chips"] = "chips"
+            if "nuts" in words:
+                catalog_terms["nuts"] = "nuts"
+            if "soap" in words:
+                catalog_terms["soap"] = "soap"
+            if "toothpaste" in words:
+                catalog_terms["toothpaste"] = "toothpaste"
+            if "towels" in words or "towel" in words:
+                catalog_terms["towels"] = "towels"
+            if "detergent" in words:
+                catalog_terms["detergent"] = "detergent"
+
+        catalog_terms["eggs"] = "eggs"
+        catalog_terms["egg"] = "eggs"
+
+        filler_words = {"and", "then", "please", "add", "buy", "to", "the", "a", "an", "on", "my", "list", "get", "need", "put"}
+
+        tokens = raw_text.split()
+        if not tokens:
+            return None
+
+        result_items = []
+        i = 0
+        n = len(tokens)
+
+        units_keys = set(UNITS_MAP.keys())
+
+        while i < n:
+            while i < n and tokens[i] in filler_words:
+                i += 1
+            if i >= n:
+                break
+
+            qty_val = None
+            unit_val = None
+
+            parsed_num = NLPService.parse_number(tokens[i])
+            if parsed_num is not None:
+                qty_val = parsed_num
+                i += 1
+                while i < n and tokens[i] in filler_words:
+                    i += 1
+
+                if i < n and tokens[i] in units_keys:
+                    unit_val = UNITS_MAP[tokens[i]]
+                    i += 1
+                    if i < n and tokens[i] in ("of", "the"):
+                        i += 1
+
+            while i < n and tokens[i] in filler_words:
+                i += 1
+            if i >= n:
+                break
+
+            matched_item_name = None
+            matched_len = 0
+
+            max_k = min(n, i + 4)
+            for k in range(max_k, i, -1):
+                phrase = " ".join(tokens[i:k])
+                if phrase in catalog_terms:
+                    matched_item_name = catalog_terms[phrase]
+                    matched_len = k - i
+                    break
+                else:
+                    res = ProductService.resolve_product(db, phrase)
+                    if res["exact_match"] is not None:
+                        matched_item_name = res["exact_match"].name.strip().lower()
+                        matched_len = k - i
+                        break
+
+            if matched_item_name is not None and matched_len > 0:
+                final_qty = qty_val
+                final_unit = unit_val
+                if len(result_items) == 0 and final_qty is None and initial_qty is not None:
+                    final_qty = initial_qty
+                    final_unit = initial_unit
+
+                result_items.append(IntentItem(
+                    item=matched_item_name,
+                    quantity=final_qty if final_qty is not None else 1.0,
+                    unit=final_unit
+                ))
+                i += matched_len
+            else:
+                return None
+
+        if result_items:
+            return result_items
+        return None
 

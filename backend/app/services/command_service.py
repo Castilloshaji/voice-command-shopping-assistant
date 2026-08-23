@@ -38,6 +38,26 @@ class CommandService:
                     data=None
                 )
 
+            # Attempt catalog-aware compound segmentation for any target item that cannot be resolved directly
+            expanded_target_items: List[IntentItem] = []
+            for item_info in target_items:
+                single_res = ProductService.resolve_product(db, item_info.item)
+                if single_res["exact_match"] is None:
+                    segmented = ProductService.resolve_compound_items(
+                        db,
+                        item_info.item,
+                        initial_qty=item_info.quantity,
+                        initial_unit=item_info.unit
+                    )
+                    if segmented:
+                        expanded_target_items.extend(segmented)
+                    else:
+                        expanded_target_items.append(item_info)
+                else:
+                    expanded_target_items.append(item_info)
+
+            target_items = expanded_target_items
+
             # Validate ALL target_items against Product catalog before creating any items
             unrecognized_items = []
             all_suggestions = []
@@ -56,11 +76,11 @@ class CommandService:
                 if all_suggestions:
                     if len(all_suggestions) == 1:
                         s_name = all_suggestions[0]["name"]
-                        msg = f"I couldn't find '{bad_item}' in our store catalog. Did you mean '{s_name}'? Nothing was added."
+                        msg = f"I couldn't identify all the products in that command. Did you mean '{s_name}'?"
                     else:
                         s_names = [f"'{s['name']}'" for s in all_suggestions[:2]]
                         joined_s = " or ".join(s_names)
-                        msg = f"I couldn't find '{bad_item}' in our store catalog. Did you mean {joined_s}? Nothing was added."
+                        msg = f"I couldn't identify all the products in that command. Did you mean {joined_s}?"
                 else:
                     msg = f"I couldn't find '{bad_item}' in our store catalog. Nothing was added."
 
